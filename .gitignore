@@ -34,3 +34,7 @@
 *.app
 
 */build/*
+
+# Misc
+.idea
+.DS_Store
