@@ -1,27 +1,40 @@
-#include "Poisson1D.hpp"
+#include "WaveEquation.hpp"
 
-// Main function.
-int
-main(int /*argc*/, char * /*argv*/[])
+int main(int argc, char *argv[])
 {
-    constexpr unsigned int dim = Poisson1D::dim;
+  // Inizializzazione MPI 
+  Utilities::MPI::MPI_InitFinalize mpi_init(argc, argv);
+  
+  // Dimensione spaziale 2D per l'equazione delle onde
+  const unsigned int dim = 2;
 
-    const unsigned int N_el = 40;
-    const unsigned int r    = 1;
-    const auto         mu   = [](const Point<dim>           &/*p*/) { return 1.0; };
-    const auto         f    = [](const Point<dim> &p) {
-        if (p[0] <= 0.125 || p[0] > 0.25)
-            return 0.0;
-        else
-            return -1.0;
-    };
+  // Parametri della simulazione:
+  // 1. Percorso del file mesh (.msh)
+  // 2. Grado polinomiale degli elementi finiti (1 = lineari)
+  // 3. Tempo finale della simulazione (T)
+  // 4. Passo temporale (delta_t)
+  WaveEquation<dim> wave_problem("../mesh/mesh-square.msh", 1, 2.0, 0.01);
 
-    Poisson1D problem(N_el, r, mu, f);
+  // Lancio della simulazione
+  wave_problem.run();
 
-    problem.setup();
-    problem.assemble();
-    problem.solve();
-    problem.output();
-
-    return 0;
+  return 0;
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
