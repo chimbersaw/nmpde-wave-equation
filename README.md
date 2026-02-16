@@ -22,15 +22,17 @@ The executable will be created into `build`, and can be executed through
 $ ./executable-name
 ```
 
-====================================================================================
+---
 
 ### Wave Equation
 
 #### Problem statement
 
-Implement a 2D finite element solver for the wave equation:
+Implement a 2D finite element solver for the wave equation in 2D:
 
-![Wave equation problem statement](img/equation.png)
+<p align="center">
+    <img src="img/equation.png" alt="wave equation" width="400"/>
+</p>
 
 TODO: discuss the time/space discretization, the numerical dissipation and dispersion behavior, and
 computational/algorithmic aspects.
