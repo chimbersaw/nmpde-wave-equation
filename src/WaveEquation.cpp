@@ -1,6 +1,7 @@
 #include "WaveEquation.hpp"
 
 #include <deal.II/base/exceptions.h>
+#include <deal.II/base/function_lib.h>
 #include <deal.II/base/numbers.h>
 #include <deal.II/base/quadrature_lib.h>
 #include <deal.II/base/utilities.h>
@@ -20,6 +21,7 @@
 #include <deal.II/numerics/matrix_tools.h>
 #include <deal.II/numerics/vector_tools.h>
 
+#include <algorithm>
 #include <cmath>
 #include <filesystem>
 #include <fstream>
@@ -27,6 +29,19 @@
 
 namespace WaveEquation
 {
+  namespace
+  {
+    constexpr double pi    = dealii::numbers::PI;
+    const double     omega = std::sqrt(2.0) * pi;
+
+    constexpr double radial_domain_min     = -5.0;
+    constexpr double radial_domain_max     = 5.0;
+    constexpr double radial_sigma          = 0.75;
+    constexpr double absorbing_layer_width = 1.5;
+    constexpr double absorbing_sigma_max   = 4.0;
+    constexpr double source_sigma          = 0.35;
+  } // namespace
+
   template <int dim>
   WaveEquationProblem<dim>::ExactSolution::ExactSolution(const double time)
     : dealii::Function<dim>(1, time)
@@ -39,9 +54,36 @@ namespace WaveEquation
     (void)component;
     Assert(dim == 2, dealii::ExcNotImplemented());
 
-    double pi    = dealii::numbers::PI;
-    double omega = std::sqrt(2.0) * pi;
     return std::sin(pi * point[0]) * std::sin(pi * point[1]) * std::cos(omega * this->get_time());
+  }
+
+  template <int dim>
+  WaveEquationProblem<dim>::InitialDisplacement::InitialDisplacement(const SetupId setup_id)
+    : dealii::Function<dim>(1, 0.0)
+    , setup_id(setup_id)
+  {}
+
+  template <int dim>
+  double
+  WaveEquationProblem<dim>::InitialDisplacement::value(const dealii::Point<dim> &point,
+                                                       const unsigned int        component) const
+  {
+    (void)component;
+    Assert(dim == 2, dealii::ExcNotImplemented());
+
+    if (setup_id == SetupId::StandingWave)
+      {
+        return std::sin(pi * point[0]) * std::sin(pi * point[1]);
+      }
+
+    if (setup_id == SetupId::RadialAbsorbing)
+      {
+        return 0.0;
+      }
+
+    const double r2 = point[0] * point[0] + point[1] * point[1];
+    const double s2 = radial_sigma * radial_sigma;
+    return std::exp(-r2 / (2.0 * s2));
   }
 
   template <int dim>
@@ -76,17 +118,25 @@ namespace WaveEquation
   WaveEquationProblem<dim>::WaveEquationProblem(const unsigned int global_refinements,
                                                 const double       final_time,
                                                 const double       cfl_number,
-                                                const std::string &mesh_path)
+                                                const std::string &mesh_path,
+                                                const SetupId      setup_id,
+                                                const unsigned int minimum_time_steps,
+                                                const unsigned int output_every,
+                                                const double       source_amplitude,
+                                                const double       source_frequency)
     : global_refinements(global_refinements)
     , final_time(final_time)
     , cfl_number(cfl_number)
     , mesh_path(mesh_path)
-    , minimum_time_steps(500)
+    , setup_id(setup_id)
+    , minimum_time_steps(minimum_time_steps)
+    , source_amplitude(source_amplitude)
+    , source_frequency(source_frequency)
     , output_directory(std::filesystem::exists("src") ? "solution" : "../solution")
     , time(0.0)
     , time_step(0.0)
     , timestep_number(0)
-    , output_every(1)
+    , output_every(output_every)
     , fe(1)
     , dof_handler(triangulation)
   {}
@@ -126,10 +176,20 @@ namespace WaveEquation
       }
     else
       {
-        dealii::GridGenerator::hyper_cube(triangulation, 0.0, 1.0);
-        triangulation.refine_global(global_refinements);
-        std::cout << "Mesh file not found, generated unit square mesh with " << triangulation.n_active_cells()
-                  << " cells.\n";
+        if (setup_id == SetupId::RadialPulse || setup_id == SetupId::RadialAbsorbing)
+          {
+            dealii::GridGenerator::hyper_cube(triangulation, radial_domain_min, radial_domain_max);
+            triangulation.refine_global(global_refinements);
+            std::cout << "Generated square domain [" << radial_domain_min << ", " << radial_domain_max << "]^2 with "
+                      << triangulation.n_active_cells() << " cells.\n";
+          }
+        else
+          {
+            dealii::GridGenerator::hyper_cube(triangulation, 0.0, 1.0);
+            triangulation.refine_global(global_refinements);
+            std::cout << "Mesh file not found, generated unit square mesh with " << triangulation.n_active_cells()
+                      << " cells.\n";
+          }
       }
   }
 
@@ -149,6 +209,7 @@ namespace WaveEquation
 
     mass_matrix.reinit(sparsity_pattern);
     stiffness_matrix.reinit(sparsity_pattern);
+    damping_matrix.reinit(sparsity_pattern);
 
     solution_old.reinit(dof_handler.n_dofs());
     solution.reinit(dof_handler.n_dofs());
@@ -163,8 +224,9 @@ namespace WaveEquation
   void
   WaveEquationProblem<dim>::assemble_matrices()
   {
-    dealii::QGauss<dim>   quadrature_formula(fe.degree + 1);
-    const auto            flags = dealii::update_values | dealii::update_gradients | dealii::update_JxW_values;
+    dealii::QGauss<dim> quadrature_formula(fe.degree + 1);
+    const auto          flags =
+      dealii::update_values | dealii::update_gradients | dealii::update_quadrature_points | dealii::update_JxW_values;
     dealii::FEValues<dim> fe_values(fe, quadrature_formula, flags);
 
     const unsigned int dofs_per_cell = fe.n_dofs_per_cell();
@@ -172,6 +234,7 @@ namespace WaveEquation
 
     dealii::FullMatrix<double>                   cell_mass(dofs_per_cell, dofs_per_cell);
     dealii::FullMatrix<double>                   cell_stiffness(dofs_per_cell, dofs_per_cell);
+    dealii::FullMatrix<double>                   cell_damping(dofs_per_cell, dofs_per_cell);
     std::vector<dealii::types::global_dof_index> local_dof_indices(dofs_per_cell);
 
     for (const auto &cell : dof_handler.active_cell_iterators())
@@ -179,9 +242,29 @@ namespace WaveEquation
         fe_values.reinit(cell);
         cell_mass      = 0.0;
         cell_stiffness = 0.0;
+        cell_damping   = 0.0;
 
         for (unsigned int q = 0; q < n_q_points; ++q)
           {
+            double sigma = 0.0;
+            if (setup_id == SetupId::RadialAbsorbing)
+              {
+                const auto &point    = fe_values.quadrature_point(q);
+                double      min_dist = radial_domain_max - radial_domain_min;
+                for (unsigned int d = 0; d < dim; ++d)
+                  {
+                    const double dist_lower = point[d] - radial_domain_min;
+                    const double dist_upper = radial_domain_max - point[d];
+                    min_dist                = std::min(min_dist, std::min(dist_lower, dist_upper));
+                  }
+
+                if (min_dist < absorbing_layer_width)
+                  {
+                    const double eta = (absorbing_layer_width - min_dist) / absorbing_layer_width;
+                    sigma            = absorbing_sigma_max * eta * eta;
+                  }
+              }
+
             for (unsigned int i = 0; i < dofs_per_cell; ++i)
               {
                 const double                 phi_i      = fe_values.shape_value(i, q);
@@ -193,6 +276,7 @@ namespace WaveEquation
 
                     cell_mass(i, j) += phi_i * phi_j * fe_values.JxW(q);
                     cell_stiffness(i, j) += grad_phi_i * grad_phi_j * fe_values.JxW(q);
+                    cell_damping(i, j) += sigma * phi_i * phi_j * fe_values.JxW(q);
                   }
               }
           }
@@ -200,6 +284,7 @@ namespace WaveEquation
         cell->get_dof_indices(local_dof_indices);
         constraints.distribute_local_to_global(cell_mass, local_dof_indices, mass_matrix);
         constraints.distribute_local_to_global(cell_stiffness, local_dof_indices, stiffness_matrix);
+        constraints.distribute_local_to_global(cell_damping, local_dof_indices, damping_matrix);
       }
   }
 
@@ -224,7 +309,6 @@ namespace WaveEquation
   {
     forcing = 0.0;
 
-    RightHandSide         rhs_function(current_time);
     dealii::QGauss<dim>   quadrature_formula(fe.degree + 1);
     dealii::FEValues<dim> fe_values(
       fe, quadrature_formula, dealii::update_values | dealii::update_quadrature_points | dealii::update_JxW_values);
@@ -241,7 +325,16 @@ namespace WaveEquation
         cell_rhs = 0.0;
         for (unsigned int q = 0; q < n_q_points; ++q)
           {
-            const double f_value = rhs_function.value(fe_values.quadrature_point(q));
+            double f_value = 0.0;
+            if (setup_id == SetupId::RadialAbsorbing)
+              {
+                const auto  &point        = fe_values.quadrature_point(q);
+                const double r2           = point[0] * point[0] + point[1] * point[1];
+                const double s2           = source_sigma * source_sigma;
+                const double envelope     = std::exp(-r2 / (2.0 * s2));
+                const double source_omega = 2.0 * pi * source_frequency;
+                f_value                   = source_amplitude * std::sin(source_omega * current_time) * envelope;
+              }
             for (unsigned int i = 0; i < dofs_per_cell; ++i)
               {
                 cell_rhs(i) += f_value * fe_values.shape_value(i, q) * fe_values.JxW(q);
@@ -257,12 +350,27 @@ namespace WaveEquation
   std::map<dealii::types::global_dof_index, double>
   WaveEquationProblem<dim>::get_boundary_values(const double current_time) const
   {
-    ExactSolution                                     exact_solution(current_time);
     std::map<dealii::types::global_dof_index, double> boundary_values;
 
+    if (setup_id == SetupId::StandingWave)
+      {
+        ExactSolution exact_solution(current_time);
+        for (const dealii::types::boundary_id boundary_id : triangulation.get_boundary_ids())
+          {
+            dealii::VectorTools::interpolate_boundary_values(dof_handler, boundary_id, exact_solution, boundary_values);
+          }
+        return boundary_values;
+      }
+
+    if (setup_id == SetupId::RadialAbsorbing)
+      {
+        return boundary_values;
+      }
+
+    const dealii::Functions::ZeroFunction<dim> zero_function(1);
     for (const dealii::types::boundary_id boundary_id : triangulation.get_boundary_ids())
       {
-        dealii::VectorTools::interpolate_boundary_values(dof_handler, boundary_id, exact_solution, boundary_values);
+        dealii::VectorTools::interpolate_boundary_values(dof_handler, boundary_id, zero_function, boundary_values);
       }
 
     return boundary_values;
@@ -292,8 +400,8 @@ namespace WaveEquation
   void
   WaveEquationProblem<dim>::initialize_solution()
   {
-    ExactSolution   initial_displacement(0.0);
-    InitialVelocity initial_velocity;
+    InitialDisplacement initial_displacement(setup_id);
+    InitialVelocity     initial_velocity;
 
     dealii::Vector<double> velocity(dof_handler.n_dofs());
     dealii::VectorTools::interpolate(dof_handler, initial_displacement, solution);
@@ -306,10 +414,12 @@ namespace WaveEquation
     dealii::Vector<double> mass_u0(dof_handler.n_dofs());
     dealii::Vector<double> mass_v0(dof_handler.n_dofs());
     dealii::Vector<double> stiffness_u0(dof_handler.n_dofs());
+    dealii::Vector<double> damping_v0(dof_handler.n_dofs());
 
     mass_matrix.vmult(mass_u0, solution);
     mass_matrix.vmult(mass_v0, velocity);
     stiffness_matrix.vmult(stiffness_u0, solution);
+    damping_matrix.vmult(damping_v0, velocity);
 
     assemble_forcing_term(0.0, forcing_vector);
 
@@ -318,6 +428,7 @@ namespace WaveEquation
     first_step_rhs.add(time_step, mass_v0);
     first_step_rhs.add(0.5 * time_step * time_step, forcing_vector);
     first_step_rhs.add(-0.5 * time_step * time_step, stiffness_u0);
+    first_step_rhs.add(-0.5 * time_step * time_step, damping_v0);
 
     solution_old = solution;
     solve_mass_system(get_boundary_values(time_step), solution, first_step_rhs);
@@ -350,17 +461,29 @@ namespace WaveEquation
   WaveEquationProblem<dim>::compute_error() const
   {
     dealii::Vector<double> difference_per_cell(triangulation.n_active_cells());
-    ExactSolution          exact_solution(time);
+    if (setup_id == SetupId::StandingWave)
+      {
+        ExactSolution exact_solution(time);
+        dealii::VectorTools::integrate_difference(dof_handler,
+                                                  solution,
+                                                  exact_solution,
+                                                  difference_per_cell,
+                                                  dealii::QGauss<dim>(fe.degree + 2),
+                                                  dealii::VectorTools::L2_norm);
+        std::cout << "Final time: " << time << '\n';
+        std::cout << "L2 error: " << difference_per_cell.l2_norm() << '\n';
+        return;
+      }
 
+    const dealii::Functions::ZeroFunction<dim> zero_function(1);
     dealii::VectorTools::integrate_difference(dof_handler,
                                               solution,
-                                              exact_solution,
+                                              zero_function,
                                               difference_per_cell,
                                               dealii::QGauss<dim>(fe.degree + 2),
                                               dealii::VectorTools::L2_norm);
-
     std::cout << "Final time: " << time << '\n';
-    std::cout << "L2 error: " << difference_per_cell.l2_norm() << '\n';
+    std::cout << "L2 norm: " << difference_per_cell.l2_norm() << '\n';
   }
 
   template <int dim>
@@ -376,6 +499,8 @@ namespace WaveEquation
     dealii::Vector<double> mass_u_n(dof_handler.n_dofs());
     dealii::Vector<double> mass_u_nm1(dof_handler.n_dofs());
     dealii::Vector<double> stiffness_u_n(dof_handler.n_dofs());
+    dealii::Vector<double> damping_u_n(dof_handler.n_dofs());
+    dealii::Vector<double> damping_u_nm1(dof_handler.n_dofs());
 
     while (time + 1e-14 < final_time)
       {
@@ -384,11 +509,15 @@ namespace WaveEquation
         mass_matrix.vmult(mass_u_n, solution);
         mass_matrix.vmult(mass_u_nm1, solution_old);
         stiffness_matrix.vmult(stiffness_u_n, solution);
+        damping_matrix.vmult(damping_u_n, solution);
+        damping_matrix.vmult(damping_u_nm1, solution_old);
 
         system_rhs = 0.0;
         system_rhs.add(2.0, mass_u_n);
         system_rhs.add(-1.0, mass_u_nm1);
         system_rhs.add(-time_step * time_step, stiffness_u_n);
+        system_rhs.add(-time_step, damping_u_n);
+        system_rhs.add(time_step, damping_u_nm1);
         system_rhs.add(time_step * time_step, forcing_vector);
 
         const double next_time = std::min(time + time_step, final_time);

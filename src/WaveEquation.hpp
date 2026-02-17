@@ -20,6 +20,13 @@
 
 namespace WaveEquation
 {
+  enum class SetupId
+  {
+    StandingWave,
+    RadialPulse,
+    RadialAbsorbing
+  };
+
   template <int dim>
   class WaveEquationProblem
   {
@@ -27,7 +34,12 @@ namespace WaveEquation
     WaveEquationProblem(unsigned int       global_refinements,
                         double             final_time,
                         double             cfl_number,
-                        const std::string &mesh_path);
+                        const std::string &mesh_path,
+                        SetupId            setup_id,
+                        unsigned int       minimum_time_steps,
+                        unsigned int       output_every,
+                        double             source_amplitude,
+                        double             source_frequency);
 
     void
     run();
@@ -53,6 +65,20 @@ namespace WaveEquation
 
       double
       value(const dealii::Point<dim> &point, unsigned int component = 0) const override;
+    };
+
+    class InitialDisplacement : public dealii::Function<dim>
+    {
+    public:
+      explicit InitialDisplacement(SetupId setup_id);
+
+      ~InitialDisplacement() override = default;
+
+      double
+      value(const dealii::Point<dim> &point, unsigned int component = 0) const override;
+
+    private:
+      const SetupId setup_id;
     };
 
     class RightHandSide : public dealii::Function<dim>
@@ -102,7 +128,10 @@ namespace WaveEquation
     const double       final_time;
     const double       cfl_number;
     const std::string  mesh_path;
+    const SetupId      setup_id;
     const unsigned int minimum_time_steps;
+    const double       source_amplitude;
+    const double       source_frequency;
     const std::string  output_directory;
 
     double       time;
@@ -119,6 +148,7 @@ namespace WaveEquation
     dealii::SparsityPattern      sparsity_pattern;
     dealii::SparseMatrix<double> mass_matrix;
     dealii::SparseMatrix<double> stiffness_matrix;
+    dealii::SparseMatrix<double> damping_matrix;
 
     dealii::Vector<double> solution_old;
     dealii::Vector<double> solution;
