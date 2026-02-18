@@ -6,7 +6,7 @@ include(cmake-common.cmake)
 add_library(WaveEquation STATIC src/WaveEquation.cpp)
 deal_ii_setup_target(WaveEquation)
 
-add_executable(wave-equation src/main.cpp)
+add_executable(wave-equation src/main.cpp src/Options.cpp)
 target_link_libraries(wave-equation WaveEquation)
 deal_ii_setup_target(wave-equation)
 
