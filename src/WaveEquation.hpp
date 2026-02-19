@@ -27,19 +27,25 @@ namespace WaveEquation
     RadialAbsorbing
   };
 
-  template <int dim>
+  struct Options
+  {
+    SetupId      setup_id             = SetupId::StandingWave;
+    unsigned int refinements          = 5;
+    double       final_time           = 5.0;
+    double       cfl_number           = 0.25;
+    unsigned int minimum_time_steps   = 500;
+    unsigned int output_every_n_steps = 1;
+    double       source_amplitude     = 20.0;
+    double       source_frequency     = 0.25;
+    std::string  mesh_path;
+  };
+
   class WaveEquationProblem
   {
   public:
-    WaveEquationProblem(unsigned int       global_refinements,
-                        double             final_time,
-                        double             cfl_number,
-                        const std::string &mesh_path,
-                        SetupId            setup_id,
-                        unsigned int       minimum_time_steps,
-                        unsigned int       output_every,
-                        double             source_amplitude,
-                        double             source_frequency);
+    static constexpr unsigned int dim = 2;
+
+    explicit WaveEquationProblem(const Options &options);
 
     void
     run();
@@ -53,7 +59,7 @@ namespace WaveEquation
       ~ExactSolution() override = default;
 
       double
-      value(const dealii::Point<dim> &point, unsigned int component = 0) const override;
+      value(const dealii::Point<dim> &point, unsigned int) const override;
     };
 
     class InitialVelocity : public dealii::Function<dim>
@@ -64,7 +70,7 @@ namespace WaveEquation
       ~InitialVelocity() override = default;
 
       double
-      value(const dealii::Point<dim> &point, unsigned int component = 0) const override;
+      value(const dealii::Point<dim> &, unsigned int) const override;
     };
 
     class InitialDisplacement : public dealii::Function<dim>
@@ -75,7 +81,7 @@ namespace WaveEquation
       ~InitialDisplacement() override = default;
 
       double
-      value(const dealii::Point<dim> &point, unsigned int component = 0) const override;
+      value(const dealii::Point<dim> &point, unsigned int) const override;
 
     private:
       const SetupId setup_id;
@@ -89,7 +95,7 @@ namespace WaveEquation
       ~RightHandSide() override = default;
 
       double
-      value(const dealii::Point<dim> &point, unsigned int component = 0) const override;
+      value(const dealii::Point<dim> &, unsigned int) const override;
     };
 
     void

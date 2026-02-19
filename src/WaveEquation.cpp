@@ -29,48 +29,37 @@
 
 namespace WaveEquation
 {
-  namespace
-  {
-    constexpr double pi    = dealii::numbers::PI;
-    const double     omega = std::sqrt(2.0) * pi;
+  constexpr unsigned int dim = WaveEquationProblem::dim;
+  static_assert(dim == 2);
 
-    constexpr double radial_domain_min     = -5.0;
-    constexpr double radial_domain_max     = 5.0;
-    constexpr double radial_sigma          = 0.75;
-    constexpr double absorbing_layer_width = 1.5;
-    constexpr double absorbing_sigma_max   = 4.0;
-    constexpr double source_sigma          = 0.35;
-  } // namespace
+  constexpr double pi    = dealii::numbers::PI;
+  const double     omega = std::sqrt(2.0) * pi;
 
-  template <int dim>
-  WaveEquationProblem<dim>::ExactSolution::ExactSolution(const double time)
+  constexpr double radial_domain_min     = -5.0;
+  constexpr double radial_domain_max     = 5.0;
+  constexpr double radial_sigma          = 0.75;
+  constexpr double absorbing_layer_width = 1.5;
+  constexpr double absorbing_sigma_max   = 4.0;
+  constexpr double source_sigma          = 0.35;
+
+  WaveEquationProblem::ExactSolution::ExactSolution(const double time)
     : dealii::Function<dim>(1, time)
   {}
 
-  template <int dim>
   double
-  WaveEquationProblem<dim>::ExactSolution::value(const dealii::Point<dim> &point, const unsigned int component) const
+  WaveEquationProblem::ExactSolution::value(const dealii::Point<dim> &point, const unsigned int) const
   {
-    (void)component;
-    Assert(dim == 2, dealii::ExcNotImplemented());
-
     return std::sin(pi * point[0]) * std::sin(pi * point[1]) * std::cos(omega * this->get_time());
   }
 
-  template <int dim>
-  WaveEquationProblem<dim>::InitialDisplacement::InitialDisplacement(const SetupId setup_id)
+  WaveEquationProblem::InitialDisplacement::InitialDisplacement(const SetupId setup_id)
     : dealii::Function<dim>(1, 0.0)
     , setup_id(setup_id)
   {}
 
-  template <int dim>
   double
-  WaveEquationProblem<dim>::InitialDisplacement::value(const dealii::Point<dim> &point,
-                                                       const unsigned int        component) const
+  WaveEquationProblem::InitialDisplacement::value(const dealii::Point<dim> &point, const unsigned int) const
   {
-    (void)component;
-    Assert(dim == 2, dealii::ExcNotImplemented());
-
     if (setup_id == SetupId::StandingWave)
       {
         return std::sin(pi * point[0]) * std::sin(pi * point[1]);
@@ -86,64 +75,46 @@ namespace WaveEquation
     return std::exp(-r2 / (2.0 * s2));
   }
 
-  template <int dim>
-  WaveEquationProblem<dim>::InitialVelocity::InitialVelocity()
+  WaveEquationProblem::InitialVelocity::InitialVelocity()
     : dealii::Function<dim>(1, 0.0)
   {}
 
-  template <int dim>
   double
-  WaveEquationProblem<dim>::InitialVelocity::value(const dealii::Point<dim> &point, const unsigned int component) const
+  WaveEquationProblem::InitialVelocity::value(const dealii::Point<dim> &, const unsigned int) const
   {
-    (void)point;
-    (void)component;
     return 0.0;
   }
 
-  template <int dim>
-  WaveEquationProblem<dim>::RightHandSide::RightHandSide(const double time)
+  WaveEquationProblem::RightHandSide::RightHandSide(const double time)
     : dealii::Function<dim>(1, time)
   {}
 
-  template <int dim>
   double
-  WaveEquationProblem<dim>::RightHandSide::value(const dealii::Point<dim> &point, const unsigned int component) const
+  WaveEquationProblem::RightHandSide::value(const dealii::Point<dim> &, const unsigned int) const
   {
-    (void)point;
-    (void)component;
     return 0.0;
   }
 
-  template <int dim>
-  WaveEquationProblem<dim>::WaveEquationProblem(const unsigned int global_refinements,
-                                                const double       final_time,
-                                                const double       cfl_number,
-                                                const std::string &mesh_path,
-                                                const SetupId      setup_id,
-                                                const unsigned int minimum_time_steps,
-                                                const unsigned int output_every,
-                                                const double       source_amplitude,
-                                                const double       source_frequency)
-    : global_refinements(global_refinements)
-    , final_time(final_time)
-    , cfl_number(cfl_number)
-    , mesh_path(mesh_path)
-    , setup_id(setup_id)
-    , minimum_time_steps(minimum_time_steps)
-    , source_amplitude(source_amplitude)
-    , source_frequency(source_frequency)
+  WaveEquationProblem::WaveEquationProblem(const Options &options)
+    : global_refinements(options.refinements)
+    , final_time(options.final_time)
+    , cfl_number(options.cfl_number)
+    , mesh_path(options.mesh_path)
+    , setup_id(options.setup_id)
+    , minimum_time_steps(options.minimum_time_steps)
+    , source_amplitude(options.source_amplitude)
+    , source_frequency(options.source_frequency)
     , output_directory(std::filesystem::exists("src") ? "solution" : "../solution")
     , time(0.0)
     , time_step(0.0)
     , timestep_number(0)
-    , output_every(output_every)
+    , output_every(options.output_every_n_steps)
     , fe(1)
     , dof_handler(triangulation)
   {}
 
-  template <int dim>
   void
-  WaveEquationProblem<dim>::make_grid()
+  WaveEquationProblem::make_grid()
   {
     std::filesystem::path resolved_mesh_path;
     if (!mesh_path.empty())
@@ -169,8 +140,6 @@ namespace WaveEquation
         grid_in.attach_triangulation(triangulation);
 
         std::ifstream input(resolved_mesh_path);
-        AssertThrow(input.is_open(), dealii::ExcMessage("Could not open mesh file: " + resolved_mesh_path.string()));
-
         grid_in.read_msh(input);
         std::cout << "Loaded mesh from " << resolved_mesh_path.string() << '\n';
       }
@@ -193,9 +162,8 @@ namespace WaveEquation
       }
   }
 
-  template <int dim>
   void
-  WaveEquationProblem<dim>::setup_system()
+  WaveEquationProblem::setup_system()
   {
     dof_handler.distribute_dofs(fe);
 
@@ -220,9 +188,8 @@ namespace WaveEquation
     std::cout << "DoFs: " << dof_handler.n_dofs() << '\n';
   }
 
-  template <int dim>
   void
-  WaveEquationProblem<dim>::assemble_matrices()
+  WaveEquationProblem::assemble_matrices()
   {
     dealii::QGauss<dim> quadrature_formula(fe.degree + 1);
     const auto          flags =
@@ -288,9 +255,8 @@ namespace WaveEquation
       }
   }
 
-  template <int dim>
   void
-  WaveEquationProblem<dim>::compute_time_step()
+  WaveEquationProblem::compute_time_step()
   {
     const double h_min  = dealii::GridTools::minimal_cell_diameter(triangulation);
     const double safety = std::max(1.0, std::sqrt(static_cast<double>(dim)));
@@ -303,9 +269,8 @@ namespace WaveEquation
     std::cout << "Computed dt = " << time_step << " with " << n_steps << " time steps.\n";
   }
 
-  template <int dim>
   void
-  WaveEquationProblem<dim>::assemble_forcing_term(const double current_time, dealii::Vector<double> &forcing) const
+  WaveEquationProblem::assemble_forcing_term(const double current_time, dealii::Vector<double> &forcing) const
   {
     forcing = 0.0;
 
@@ -346,9 +311,8 @@ namespace WaveEquation
       }
   }
 
-  template <int dim>
   std::map<dealii::types::global_dof_index, double>
-  WaveEquationProblem<dim>::get_boundary_values(const double current_time) const
+  WaveEquationProblem::get_boundary_values(const double current_time) const
   {
     std::map<dealii::types::global_dof_index, double> boundary_values;
 
@@ -376,11 +340,10 @@ namespace WaveEquation
     return boundary_values;
   }
 
-  template <int dim>
   void
-  WaveEquationProblem<dim>::solve_mass_system(const std::map<dealii::types::global_dof_index, double> &boundary_values,
-                                              dealii::Vector<double>                                  &destination,
-                                              const dealii::Vector<double>                            &rhs) const
+  WaveEquationProblem::solve_mass_system(const std::map<dealii::types::global_dof_index, double> &boundary_values,
+                                         dealii::Vector<double>                                  &destination,
+                                         const dealii::Vector<double>                            &rhs) const
   {
     dealii::SparseMatrix<double> system_matrix;
     system_matrix.reinit(sparsity_pattern);
@@ -396,9 +359,8 @@ namespace WaveEquation
     constraints.distribute(destination);
   }
 
-  template <int dim>
   void
-  WaveEquationProblem<dim>::initialize_solution()
+  WaveEquationProblem::initialize_solution()
   {
     InitialDisplacement initial_displacement(setup_id);
     InitialVelocity     initial_velocity;
@@ -441,9 +403,8 @@ namespace WaveEquation
       }
   }
 
-  template <int dim>
   void
-  WaveEquationProblem<dim>::output_results(const unsigned int timestep) const
+  WaveEquationProblem::output_results(const unsigned int timestep) const
   {
     std::filesystem::create_directories(output_directory);
 
@@ -456,9 +417,8 @@ namespace WaveEquation
     data_out.write_vtu(output);
   }
 
-  template <int dim>
   void
-  WaveEquationProblem<dim>::compute_error() const
+  WaveEquationProblem::compute_error() const
   {
     dealii::Vector<double> difference_per_cell(triangulation.n_active_cells());
     if (setup_id == SetupId::StandingWave)
@@ -486,9 +446,8 @@ namespace WaveEquation
     std::cout << "L2 norm: " << difference_per_cell.l2_norm() << '\n';
   }
 
-  template <int dim>
   void
-  WaveEquationProblem<dim>::run()
+  WaveEquationProblem::run()
   {
     make_grid();
     setup_system();
@@ -536,6 +495,4 @@ namespace WaveEquation
 
     compute_error();
   }
-
-  template class WaveEquationProblem<2>;
 } // namespace WaveEquation
