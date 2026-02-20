@@ -37,6 +37,9 @@
 mesh/*.msh
 solution-*.vtu
 solution-*.pvtu
+solution/*.vtu
+solution/*.pvtu
+misc/
 
 # Misc
 .idea
