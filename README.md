@@ -30,3 +30,42 @@ Please place all your sources into the `src` folder.
 Binary files must not be uploaded to the repository (including executables).
 
 Mesh files should not be uploaded to the repository. If applicable, upload `gmsh` scripts with suitable instructions to generate the meshes (and ideally a Makefile that runs those instructions). If not applicable, consider uploading the meshes to a different file sharing service, and providing a download link as part of the building and running instructions.
+
+## Solver usage
+
+### Build
+
+```bash
+cmake -S . -B cmake-build-release -DCMAKE_BUILD_TYPE=Release
+cmake --build cmake-build-release -j
+```
+
+### Run with config
+
+```bash
+mpirun -n 4 ./cmake-build-release/wave-equation --config configs/theta_crank_nicolson.cfg
+```
+
+### Available presets
+
+- `configs/theta_forward.cfg`
+- `configs/theta_crank_nicolson.cfg`
+- `configs/theta_backward.cfg`
+- `configs/newmark_avg_accel.cfg`
+- `configs/newmark_central_difference.cfg`
+- `configs/convergence_space.cfg`
+- `configs/convergence_time.cfg`
+- `configs/convergence_both.cfg`
+
+### Convergence outputs
+
+Convergence runs write CSV files in `solution/`:
+
+- `solution/convergence_space.csv`
+- `solution/convergence_time.csv`
+
+Generate plots with:
+
+```bash
+python3 scripts/plot_convergence.py --space-csv solution/convergence_space.csv --time-csv solution/convergence_time.csv --output solution/convergence.png
+```
