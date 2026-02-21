@@ -1,0 +1,269 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{array}
+
+\title{Finite Element Solution of the 2D Wave Equation\\
+\large Fully Distributed MPI Implementation with $\theta$-Family and Newmark-$\beta$}
+\author{NM-PDE Project}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\section{Introduction and Problem Statement}
+We solve the wave-equation problem: find $u(x,t)$ such that
+\begin{equation}
+  u_{tt} - c^2 \Delta u = f \quad \text{in } \Omega \times (0,T],
+\end{equation}
+with initial conditions
+\begin{equation}
+  u(\cdot,0)=u_0,\qquad u_t(\cdot,0)=u_1,
+\end{equation}
+and Dirichlet boundary data on $\partial\Omega$.
+
+The implementation is a config-driven MPI C++ solver using deal.II and Trilinos, with simplicial finite elements on triangular Gmsh meshes, two time-discretization families ($\theta$ and Newmark-$\beta$), ParaView output, and automated convergence studies.
+
+\section{Continuous Model and Weak Formulation}
+\subsection{Strong Form and Functional Setting}
+Let $\Omega\subset\mathbb{R}^2$ be bounded. The weak formulation is posed in Sobolev spaces $H^1(\Omega)$ and $H_0^1(\Omega)$ \cite{salsa}. For homogeneous Dirichlet data, test functions belong to $V=H_0^1(\Omega)$.
+
+\subsection{Homogeneous Dirichlet Weak Form and Semi-Discrete System}
+For $v\in V$, multiplying by $v$ and integrating by parts gives
+\begin{equation}
+  \langle u_{tt},v\rangle + c^2(\nabla u,\nabla v)=(f,v),\qquad \forall v\in V.
+\end{equation}
+Using a simplicial FE subspace $V_h=\text{span}\{\varphi_i\}_{i=1}^N$ and
+$u_h(x,t)=\sum_{j=1}^N U_j(t)\varphi_j(x)$, one obtains the matrix ODE
+\begin{equation}
+  M\ddot{\mathbf U}(t) + c^2 K\mathbf U(t)=\mathbf F(t),
+\end{equation}
+with
+\begin{equation}
+  M_{ij}=\int_\Omega \varphi_i\varphi_j\,dx,\quad
+  K_{ij}=\int_\Omega \nabla\varphi_i\cdot\nabla\varphi_j\,dx,\quad
+  F_i(t)=\int_\Omega f(\cdot,t)\varphi_i\,dx.
+\end{equation}
+
+\subsection{Non-Homogeneous Dirichlet Data via Lifting}
+Following the standard lifting argument \cite{quarteroni,salsa}, for boundary data $u=g$ on $\partial\Omega$, write
+\begin{equation}
+  u = w + \widetilde g, \qquad w\in H_0^1(\Omega), \qquad \widetilde g|_{\partial\Omega}=g.
+\end{equation}
+Then $w$ solves
+\begin{equation}
+  \langle w_{tt},v\rangle + c^2(\nabla w,\nabla v)
+  = (f,v) - \langle \widetilde g_{tt},v\rangle - c^2(\nabla\widetilde g,\nabla v).
+\end{equation}
+In matrix form:
+\begin{equation}
+  M\ddot{\mathbf W}+c^2K\mathbf W = \mathbf F - M\ddot{\mathbf G} - c^2K\mathbf G.
+\end{equation}
+In the code, Dirichlet values are imposed strongly at each step on all boundary IDs
+via constraints and boundary-value elimination. This is algebraically equivalent to
+working with lifted unknowns and interior DoFs.
+
+\section{Space Discretization and Fully Distributed MPI Implementation}
+The space discretization follows the project requirements and simplicial-FEM theory \cite{quarteroni}.
+
+\subsection{Mesh and FE Space}
+\begin{itemize}[leftmargin=*]
+  \item Mesh input: Gmsh triangle meshes (\texttt{.msh}) generated from \texttt{mesh/*.geo}.
+  \item Triangulation: \texttt{parallel::fullydistributed::Triangulation<2>}.
+  \item FE: runtime-selectable \texttt{FE\_SimplexP<2>(degree)} (default degree 1).
+  \item Quadrature: only \texttt{QGaussSimplex<2>}.
+  \item DoFs/constraints: \texttt{DoFHandler<2>} + hanging-node constraints + Dirichlet BC on all boundary IDs with configured boundary function values.
+\end{itemize}
+
+\subsection{Distributed Mesh Import Pipeline}
+The code uses this pipeline:
+\begin{enumerate}[leftmargin=*]
+  \item Read Gmsh mesh into serial \texttt{Triangulation<2>} with \texttt{GridIn}.
+  \item Partition with \texttt{GridTools::partition\_triangulation}.
+  \item Build a \texttt{TriangulationDescription}.
+  \item Create the fully distributed triangulation from the description.
+\end{enumerate}
+
+\subsection{Assembly and Linear Algebra}
+Mass and stiffness matrices are assembled once. The forcing vector $\mathbf F(t)$ is assembled each step.
+All vectors/matrices are distributed Trilinos MPI objects. Implicit systems are solved with Krylov iterations (CG) and AMG-style preconditioning (Trilinos \texttt{PreconditionAMG}).
+
+\section{Time Discretization}
+The report peer examples (\texttt{2.pdf}, \texttt{5.pdf}) emphasized explicit update formulas and stability/dispersion implications. The present report includes those details for both families.
+
+\subsection{$\theta$-Method Family}
+Introduce $\mathbf v=\dot{\mathbf u}$, giving the first-order system
+\begin{equation}
+\dot{\mathbf u}=\mathbf v,
+\qquad
+M\dot{\mathbf v}+c^2K\mathbf u=\mathbf F(t).
+\end{equation}
+With step $\Delta t$ and weight $\theta\in[0,1]$:
+\begin{align}
+  \frac{\mathbf u^{n+1}-\mathbf u^n}{\Delta t}
+  &= \theta\mathbf v^{n+1}+(1-\theta)\mathbf v^n,\\
+  M\frac{\mathbf v^{n+1}-\mathbf v^n}{\Delta t}
+  &+c^2K\left(\theta\mathbf u^{n+1}+(1-\theta)\mathbf u^n\right)=\mathbf F_\theta^{n+1},
+\end{align}
+where $\mathbf F_\theta^{n+1}=\theta\mathbf F^{n+1}+(1-\theta)\mathbf F^n$.
+For $\theta>0$, eliminating $\mathbf v^{n+1}$ gives an SPD displacement solve with effective matrix
+\begin{equation}
+  A_\theta = \frac{1}{\Delta t^2}M + c^2\theta^2K.
+\end{equation}
+Special cases:
+\begin{itemize}[leftmargin=*]
+  \item $\theta=0$: forward Euler-type explicit update (conditionally stable).
+  \item $\theta=0.5$: Crank--Nicolson (second-order, low dissipation, phase error dominates when $\Delta t$ is large).
+  \item $\theta=1$: backward Euler (first-order, strongly dissipative).
+\end{itemize}
+
+\subsection{Newmark-$\beta$ Family}
+The Newmark update acts directly on
+$M\ddot{\mathbf u}+c^2K\mathbf u=\mathbf F$:
+\begin{align}
+  \mathbf u^{n+1} &= \mathbf u^n + \Delta t\mathbf v^n
+   + \Delta t^2\left(\frac12-\beta\right)\mathbf a^n + \beta\Delta t^2\mathbf a^{n+1},\\
+  \mathbf v^{n+1} &= \mathbf v^n + \Delta t(1-\gamma)\mathbf a^n + \Delta t\gamma\mathbf a^{n+1}.
+\end{align}
+
+For $\beta>0$, the implementation solves for $\mathbf u^{n+1}$ through
+\begin{equation}
+  \left(\frac{1}{\beta\Delta t^2}M + c^2K\right)\mathbf u^{n+1}=\mathbf r^{n+1},
+\end{equation}
+then reconstructs $\mathbf a^{n+1}$ and $\mathbf v^{n+1}$. For $\beta=0$ (central-difference/leapfrog setting with $\gamma=0.5$), the code uses explicit displacement prediction and a mass solve for acceleration.
+
+Important presets:
+\begin{itemize}[leftmargin=*]
+  \item $(\beta,\gamma)=(0.25,0.5)$ average-acceleration: second-order, unconditionally stable, minimal algorithmic dissipation.
+  \item $(\beta,\gamma)=(0,0.5)$ central difference style: explicit/conditionally stable, CFL-restricted.
+\end{itemize}
+
+\subsection{Dissipation and Dispersion (Concise Discussion)}
+Consistent with standard references \cite{quarteroni,salsa} and peer-report observations:
+\begin{itemize}[leftmargin=*]
+  \item Strongly implicit first-order damping schemes (e.g., backward Euler) introduce noticeable numerical dissipation.
+  \item Crank--Nicolson and average-acceleration Newmark preserve amplitudes better but can show phase drift (dispersion) when $\Delta t$ is not small enough.
+  \item Explicit schemes can be low-dissipative in stable CFL regimes, but instability appears quickly once CFL is violated.
+\end{itemize}
+
+\section{Software Architecture and Config Workflow}
+\subsection{Source Organization}
+\begin{itemize}[leftmargin=*]
+  \item \texttt{src/wave\_solver.*}: FE setup, assembly, MPI vectors/matrices, output, solver interface.
+  \item \texttt{src/integrators/theta\_integrator.cpp} + \texttt{src/theta\_integrator.hpp}.
+  \item \texttt{src/integrators/newmark\_integrator.cpp} + \texttt{src/newmark\_integrator.hpp}.
+  \item \texttt{src/config.*}: strict key=value parser with method-aware validation.
+  \item \texttt{src/convergence\_runner.*}: spatial/temporal sweep driver and CSV writer.
+  \item \texttt{src/function\_factory.*}: manufactured solutions / forcing / boundary scenarios.
+\end{itemize}
+
+\subsection{CLI and Config}
+CLI is intentionally minimal:
+\begin{verbatim}
+wave-equation --config path/to/file.cfg
+\end{verbatim}
+
+Key config blocks:
+\begin{itemize}[leftmargin=*]
+  \item Core run:
+  \texttt{mode, method, mesh\_file, fe\_degree, wave\_speed, dt, n\_steps}.
+  \item Output/scenario:
+  \texttt{output\_interval, output\_dir, scenario\_u0, scenario\_u1,}
+  \texttt{scenario\_f, scenario\_bc}.
+  \item Method-specific:
+  \texttt{theta} for the $\theta$ family;
+  \texttt{beta} and \texttt{gamma} for Newmark.
+  \item Convergence:
+  \texttt{convergence\_mesh\_files},
+  \texttt{convergence\_dt\_values},
+  \texttt{convergence\_csv\_space},
+  \texttt{convergence\_csv\_time}.
+\end{itemize}
+
+Unknown keys and invalid ranges are rejected during parsing.
+
+\section{Convergence Methodology and Results}
+\subsection{Manufactured Reference and Error Norms}
+To measure error, we use the standing-wave exact solution on $\Omega=[0,1]^2$:
+\begin{equation}
+  u_{\text{exact}}(x,y,t)=\cos\!\left(c\sqrt{2}\pi t\right)\sin(\pi x)\sin(\pi y),
+\end{equation}
+with compatible initial/boundary data and zero forcing.
+
+At final time $t_{\mathrm f}$, errors are computed in:
+\begin{itemize}[leftmargin=*]
+  \item $L^2$ norm,
+  \item full $H^1$ norm via \texttt{VectorTools::H1\_norm} (as requested).
+\end{itemize}
+
+\subsection{Automated Studies and CSV Output}
+Implemented modes:
+\begin{itemize}[leftmargin=*]
+  \item \texttt{convergence\_space}: vary mesh hierarchy, fixed $\Delta t$.
+  \item \texttt{convergence\_time}: vary $\Delta t$, fixed fine mesh.
+  \item \texttt{convergence\_both}: run both and write two CSV files.
+\end{itemize}
+
+Each CSV row stores:
+\begin{verbatim}
+study,method,fe_degree,theta,beta,gamma,mesh_file,dt,n_steps,t_final,h,ndofs,
+l2_error,h1_error,observed_order_l2,observed_order_h1
+\end{verbatim}
+
+\subsection{Observed Behavior from Current Runs}
+A representative run with implicit Newmark ($\beta=0.25,\gamma=0.5$), degree-1 FE, and generated unit-square mesh hierarchy gives:
+\begin{itemize}[leftmargin=*]
+  \item Spatial study: observed $L^2$ orders around $\approx 1.7$--$2.6$ and $H^1$ around $\approx 0.87$--$1.35$, consistent with expected $\mathcal O(h^2)$ and $\mathcal O(h)$ asymptotics for $P1$.
+  \item Temporal study on a fixed mesh: error is nearly saturated (very small slope), indicating spatial error dominates for the selected mesh/time range.
+\end{itemize}
+
+Figure~\ref{fig:conv} is produced by \texttt{scripts/plot\_convergence.py} from the generated CSV files.
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=0.82\textwidth]{../solution/convergence.png}
+  \caption{Log--log convergence plot automatically generated from CSV outputs.}
+  \label{fig:conv}
+\end{figure}
+
+\section{How to Build and Run}
+\subsection{Build}
+\begin{verbatim}
+cmake -S . -B cmake-build-release -DCMAKE_BUILD_TYPE=Release
+cmake --build cmake-build-release -j
+\end{verbatim}
+
+\subsection{Mesh Generation}
+\begin{verbatim}
+./scripts/generate_mesh.sh
+\end{verbatim}
+
+\subsection{Solve Mode}
+\begin{verbatim}
+mpirun -n 4 ./cmake-build-release/wave-equation \
+  --config configs/theta_crank_nicolson.cfg
+\end{verbatim}
+
+\subsection{Convergence + Plot}
+\begin{verbatim}
+mpirun -n 4 ./cmake-build-release/wave-equation \
+  --config configs/convergence_both.cfg
+python3 scripts/plot_convergence.py \
+  --space-csv solution/convergence_space.csv \
+  --time-csv solution/convergence_time.csv \
+  --output solution/convergence.png
+\end{verbatim}
+
+ParaView files (\texttt{.pvtu/.vtu}) are written to \texttt{solution/}.
+
+\section{Conclusions}
+The project now provides a fully distributed simplicial-FEM wave solver aligned with the requested workflow: separate $\theta$ and Newmark integrators, strict config-driven execution, AMG-preconditioned Krylov implicit solves, ParaView export, and automated convergence CSV/plot generation. The report includes full weak-form context, method formulas, and implementation-to-theory mapping.
+
+\bibliographystyle{plain}
+\bibliography{references}
+
+\end{document}
