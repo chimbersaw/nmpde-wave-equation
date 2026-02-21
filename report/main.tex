@@ -225,7 +225,7 @@ Figure~\ref{fig:conv} is produced by \texttt{scripts/plot\_convergence.py} from 
 
 \begin{figure}[h]
   \centering
-  \includegraphics[width=0.82\textwidth]{../solution/convergence.png}
+  \includegraphics[width=0.82\textwidth]{../results/convergence.png}
   \caption{Log--log convergence plot automatically generated from CSV outputs.}
   \label{fig:conv}
 \end{figure}
@@ -253,9 +253,9 @@ mpirun -n 4 ./cmake-build-release/wave-equation \
 mpirun -n 4 ./cmake-build-release/wave-equation \
   --config configs/convergence_both.cfg
 python3 scripts/plot_convergence.py \
-  --space-csv solution/convergence_space.csv \
-  --time-csv solution/convergence_time.csv \
-  --output solution/convergence.png
+  --space-csv results/convergence_space.csv \
+  --time-csv results/convergence_time.csv \
+  --output results/convergence.png
 \end{verbatim}
 
 ParaView files (\texttt{.pvtu/.vtu}) are written to \texttt{solution/}.

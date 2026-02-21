@@ -42,8 +42,8 @@ struct WaveProblemConfig
   std::vector<std::string> convergence_mesh_files;
   std::vector<double>      convergence_dt_values;
   std::string convergence_reference_case = "standing_wave_exact";
-  std::string convergence_csv_space = "solution/convergence_space.csv";
-  std::string convergence_csv_time = "solution/convergence_time.csv";
+  std::string convergence_csv_space = "results/convergence_space.csv";
+  std::string convergence_csv_time = "results/convergence_time.csv";
 };
 
 WaveProblemConfig

@@ -59,13 +59,13 @@ mpirun -n 4 ./cmake-build-release/wave-equation --config configs/theta_crank_nic
 
 ### Convergence outputs
 
-Convergence runs write CSV files in `solution/`:
+Convergence runs write CSV files in `results/`:
 
-- `solution/convergence_space.csv`
-- `solution/convergence_time.csv`
+- `results/convergence_space.csv`
+- `results/convergence_time.csv`
 
 Generate plots with:
 
 ```bash
-python3 scripts/plot_convergence.py --space-csv solution/convergence_space.csv --time-csv solution/convergence_time.csv --output solution/convergence.png
+python3 scripts/plot_convergence.py --space-csv results/convergence_space.csv --time-csv results/convergence_time.csv --output results/convergence.png
 ```

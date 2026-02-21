@@ -35,10 +35,7 @@
 
 */build/*
 mesh/*.msh
-solution-*.vtu
-solution-*.pvtu
-solution/*.vtu
-solution/*.pvtu
+solution/
 misc/
 
 # Misc

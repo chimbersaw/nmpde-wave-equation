@@ -54,9 +54,9 @@ def make_plot(rows, x_key, title, output_path):
 
 def main():
     parser = argparse.ArgumentParser(description="Plot convergence CSV files")
-    parser.add_argument("--space-csv", default="solution/convergence_space.csv")
-    parser.add_argument("--time-csv", default="solution/convergence_time.csv")
-    parser.add_argument("--output", default="solution/convergence.png")
+    parser.add_argument("--space-csv", default="results/convergence_space.csv")
+    parser.add_argument("--time-csv", default="results/convergence_time.csv")
+    parser.add_argument("--output", default="results/convergence.png")
     args = parser.parse_args()
 
     output_path = Path(args.output)
