@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 import argparse
 import csv
-import math
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -21,35 +20,6 @@ def to_float(row, key):
         return float(row[key])
     except Exception:
         return float("nan")
-
-
-def make_plot(rows, x_key, title, output_path):
-    xs = [to_float(r, x_key) for r in rows]
-    l2 = [to_float(r, "l2_error") for r in rows]
-    h1 = [to_float(r, "h1_error") for r in rows]
-
-    paired = sorted(zip(xs, l2, h1), key=lambda t: t[0], reverse=True)
-    xs = [p[0] for p in paired]
-    l2 = [p[1] for p in paired]
-    h1 = [p[2] for p in paired]
-
-    fig, ax = plt.subplots(figsize=(8, 5))
-    ax.loglog(xs, l2, "o-", label="L2 error")
-    ax.loglog(xs, h1, "s-", label="H1 error")
-
-    ax.set_xlabel(x_key)
-    ax.set_ylabel("error")
-    ax.set_title(title)
-    ax.grid(True, which="both", ls=":")
-    ax.legend()
-
-    for i in range(1, len(xs)):
-        if xs[i] > 0 and xs[i - 1] > 0 and l2[i] > 0 and l2[i - 1] > 0:
-            order = math.log(l2[i - 1] / l2[i]) / math.log(xs[i - 1] / xs[i])
-            ax.annotate(f"p~{order:.2f}", (xs[i], l2[i]))
-
-    fig.tight_layout()
-    fig.savefig(output_path, dpi=160)
 
 
 def main():

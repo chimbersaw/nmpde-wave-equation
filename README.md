@@ -61,14 +61,36 @@ Gaussian pulse (`configs/gaussian_pulse/`):
 - `theta_backward.cfg`
 - `newmark_avg_accel.cfg`
 - `newmark_central_difference.cfg`
-- `periodic_center_absorbing.cfg` (periodic center source)
-
-`periodic_center_absorbing.cfg` uses `scenario_bc = absorbing` to reduce wall reflections.
+- `periodic_center_absorbing.cfg` (periodic center source with absorbing boundary)
 
 Convergence (standing wave, `configs/convergence/`):
 - `convergence_space.cfg`
 - `convergence_time.cfg`
 - `convergence_both.cfg`
+
+### Config keys (key=value)
+
+Core:
+- `mode = solve | convergence_space | convergence_time | convergence_both`
+- `method = theta | newmark`
+- `mesh_file`, `fe_degree`, `wave_speed`, `dt`, `n_steps`
+- `output_interval`, `output_dir`
+- `scenario_u0`, `scenario_u1`, `scenario_f`, `scenario_bc`
+- optional damping profile: `scenario_sigma` (default `zero`)
+
+Method-specific:
+- `theta` for `method=theta`
+- `beta`, `gamma` for `method=newmark`
+
+Convergence-specific:
+- `convergence_mesh_files`
+- `convergence_dt_values`
+- `convergence_reference_case`
+- `convergence_csv_space`
+- `convergence_csv_time`
+
+Absorbing boundary:
+- set `scenario_bc = absorbing` to activate the first-order absorbing boundary contribution.
 
 ### Convergence outputs
 
@@ -82,3 +104,8 @@ Generate plots with:
 ```bash
 python3 scripts/plot_convergence.py --space-csv results/convergence_space.csv --time-csv results/convergence_time.csv --output results/convergence.png
 ```
+
+### Output files
+
+- `solution/`: time-series visualization files (`.vtu` + `.pvtu`) for ParaView.
+- `results/`: convergence CSV files and generated plots.

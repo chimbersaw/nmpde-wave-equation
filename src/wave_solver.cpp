@@ -24,7 +24,6 @@
 
 #include <cmath>
 #include <filesystem>
-#include <limits>
 #include <set>
 
 #include "function_factory.hpp"
@@ -49,12 +48,10 @@ WaveSolver::WaveSolver(const WaveProblemConfig &config, MPI_Comm mpi_communicato
   , dof_handler(triangulation)
   , quadrature(static_cast<unsigned int>(config.fe_degree + 2))
 {
-  u0_function             = make_named_function(config.scenario_u0, config.wave_speed);
-  u1_function             = make_named_function(config.scenario_u1, config.wave_speed);
-  forcing_function        = make_named_function(config.scenario_f, config.wave_speed);
-  sigma_function          = make_named_function(config.scenario_sigma, config.wave_speed);
-  boundary_function       = make_named_function(config.scenario_bc, config.wave_speed);
-  exact_solution_function = make_named_function(config.convergence_reference_case, config.wave_speed);
+  u0_function      = make_named_function(config.scenario_u0, config.wave_speed);
+  u1_function      = make_named_function(config.scenario_u1, config.wave_speed);
+  forcing_function = make_named_function(config.scenario_f, config.wave_speed);
+  sigma_function   = make_named_function(config.scenario_sigma, config.wave_speed);
 
   setup_triangulation_and_dofs();
   assemble_system_matrices();

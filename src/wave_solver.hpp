@@ -150,8 +150,6 @@ private:
   std::shared_ptr<dealii::Function<2>> u1_function;
   std::shared_ptr<dealii::Function<2>> forcing_function;
   std::shared_ptr<dealii::Function<2>> sigma_function;
-  std::shared_ptr<dealii::Function<2>> boundary_function;
-  std::shared_ptr<dealii::Function<2>> exact_solution_function;
 
   bool output_enabled = true;
 };
