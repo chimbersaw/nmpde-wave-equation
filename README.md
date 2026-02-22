@@ -61,6 +61,9 @@ Gaussian pulse (`configs/gaussian_pulse/`):
 - `theta_backward.cfg`
 - `newmark_avg_accel.cfg`
 - `newmark_central_difference.cfg`
+- `periodic_center_absorbing.cfg` (periodic center source)
+
+`periodic_center_absorbing.cfg` uses `scenario_bc = absorbing` to reduce wall reflections.
 
 Convergence (standing wave, `configs/convergence/`):
 - `convergence_space.cfg`

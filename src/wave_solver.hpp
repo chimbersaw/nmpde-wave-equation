@@ -1,28 +1,33 @@
 #pragma once
 
-#include "config.hpp"
-
 #include <deal.II/base/conditional_ostream.h>
 #include <deal.II/base/function.h>
 #include <deal.II/base/index_set.h>
 #include <deal.II/base/quadrature_lib.h>
+
 #include <deal.II/distributed/fully_distributed_tria.h>
+
 #include <deal.II/dofs/dof_handler.h>
+
 #include <deal.II/fe/fe_simplex_p.h>
+
 #include <deal.II/lac/affine_constraints.h>
 #include <deal.II/lac/trilinos_sparse_matrix.h>
 #include <deal.II/lac/trilinos_vector.h>
+
 #include <deal.II/numerics/data_out.h>
 
 #include <map>
 #include <memory>
 #include <string>
 
+#include "config.hpp"
+
 struct ConvergenceResult
 {
-  double       t_final = 0.0;
-  double       h = 0.0;
-  unsigned int ndofs = 0;
+  double       t_final  = 0.0;
+  double       h        = 0.0;
+  unsigned int ndofs    = 0;
   double       l2_error = 0.0;
   double       h1_error = 0.0;
 };
@@ -53,6 +58,9 @@ public:
   const MatrixType &
   get_stiffness_matrix() const;
 
+  const MatrixType &
+  get_damping_matrix() const;
+
   VectorType &
   get_solution();
 
@@ -75,26 +83,16 @@ public:
   solve_spd_system(const MatrixType &A, VectorType &x, const VectorType &b) const;
 
   void
-  solve_displacement_system(const MatrixType &A,
-                            VectorType       &u,
-                            const VectorType &rhs,
-                            const double      time) const;
+  solve_displacement_system(const MatrixType &A, VectorType &u, const VectorType &rhs, const double time) const;
 
   void
   enforce_displacement_bc(VectorType &u, double time) const;
 
   void
-  enforce_velocity_bc(VectorType &v,
-                      double      previous_time,
-                      double      current_time,
-                      double      dt) const;
+  enforce_velocity_bc(VectorType &v, double previous_time, double current_time, double dt) const;
 
   void
-  enforce_acceleration_bc(VectorType &a,
-                          double      previous_time,
-                          double      current_time,
-                          double      next_time,
-                          double      dt) const;
+  enforce_acceleration_bc(VectorType &a, double previous_time, double current_time, double next_time, double dt) const;
 
   void
   output_results(unsigned int step, double time) const;
@@ -113,10 +111,9 @@ private:
   assemble_system_matrices();
 
   void
-  build_constraints(
-    double time,
-    dealii::AffineConstraints<double> &constraints,
-    std::map<dealii::types::global_dof_index, double> &boundary_values) const;
+  build_constraints(double                                             time,
+                    dealii::AffineConstraints<double>                 &constraints,
+                    std::map<dealii::types::global_dof_index, double> &boundary_values) const;
 
   double
   compute_l2_error(double time) const;
@@ -143,6 +140,7 @@ private:
 
   MatrixType mass_matrix;
   MatrixType stiffness_matrix;
+  MatrixType damping_matrix;
 
   VectorType solution;
   VectorType velocity;
@@ -151,6 +149,7 @@ private:
   std::shared_ptr<dealii::Function<2>> u0_function;
   std::shared_ptr<dealii::Function<2>> u1_function;
   std::shared_ptr<dealii::Function<2>> forcing_function;
+  std::shared_ptr<dealii::Function<2>> sigma_function;
   std::shared_ptr<dealii::Function<2>> boundary_function;
   std::shared_ptr<dealii::Function<2>> exact_solution_function;
 

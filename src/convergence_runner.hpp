@@ -1,10 +1,10 @@
 #pragma once
 
-#include "config.hpp"
-#include "wave_solver.hpp"
-
 #include <string>
 #include <vector>
+
+#include "config.hpp"
+#include "wave_solver.hpp"
 
 class ConvergenceRunner
 {
@@ -17,17 +17,17 @@ public:
 private:
   struct Entry
   {
-    std::string study;
-    std::string mesh_file;
-    double      dt = 0.0;
-    int         n_steps = 0;
-    double      t_final = 0.0;
-    double      h = 0.0;
-    unsigned int ndofs = 0;
-    double      l2_error = 0.0;
-    double      h1_error = 0.0;
-    double      observed_order_l2 = 0.0;
-    double      observed_order_h1 = 0.0;
+    std::string  study;
+    std::string  mesh_file;
+    double       dt                = 0.0;
+    int          n_steps           = 0;
+    double       t_final           = 0.0;
+    double       h                 = 0.0;
+    unsigned int ndofs             = 0;
+    double       l2_error          = 0.0;
+    double       h1_error          = 0.0;
+    double       observed_order_l2 = 0.0;
+    double       observed_order_h1 = 0.0;
   };
 
   std::vector<Entry>

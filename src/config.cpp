@@ -2,8 +2,8 @@
 
 #include <algorithm>
 #include <cctype>
-#include <fstream>
 #include <filesystem>
+#include <fstream>
 #include <map>
 #include <set>
 #include <sstream>
@@ -91,20 +91,16 @@ namespace
           throw std::runtime_error("beta must be >= 0.");
       }
 
-    if (cfg.mode == WaveProblemConfig::Mode::convergence_space ||
-        cfg.mode == WaveProblemConfig::Mode::convergence_both)
+    if (cfg.mode == WaveProblemConfig::Mode::convergence_space || cfg.mode == WaveProblemConfig::Mode::convergence_both)
       {
         if (cfg.convergence_mesh_files.empty())
-          throw std::runtime_error(
-            "convergence_mesh_files must be provided for spatial convergence.");
+          throw std::runtime_error("convergence_mesh_files must be provided for spatial convergence.");
       }
 
-    if (cfg.mode == WaveProblemConfig::Mode::convergence_time ||
-        cfg.mode == WaveProblemConfig::Mode::convergence_both)
+    if (cfg.mode == WaveProblemConfig::Mode::convergence_time || cfg.mode == WaveProblemConfig::Mode::convergence_both)
       {
         if (cfg.convergence_dt_values.empty())
-          throw std::runtime_error(
-            "convergence_dt_values must be provided for temporal convergence.");
+          throw std::runtime_error("convergence_dt_values must be provided for temporal convergence.");
       }
   }
 } // namespace
@@ -112,12 +108,8 @@ namespace
 std::string
 trim_copy(const std::string &input)
 {
-  auto begin = std::find_if_not(
-    input.begin(), input.end(), [](unsigned char c) { return std::isspace(c); });
-  auto end = std::find_if_not(input.rbegin(),
-                              input.rend(),
-                              [](unsigned char c) { return std::isspace(c); })
-               .base();
+  auto begin = std::find_if_not(input.begin(), input.end(), [](unsigned char c) { return std::isspace(c); });
+  auto end   = std::find_if_not(input.rbegin(), input.rend(), [](unsigned char c) { return std::isspace(c); }).base();
 
   if (begin >= end)
     return "";
@@ -132,32 +124,32 @@ parse_config_file(const std::string &path)
   if (!in)
     throw std::runtime_error("Cannot open config file: " + path);
 
-  WaveProblemConfig cfg;
+  WaveProblemConfig           cfg;
   const std::filesystem::path config_path(path);
   const std::filesystem::path config_dir = config_path.parent_path();
 
-  const std::set<std::string> known_keys = {
-    "mode",
-    "method",
-    "mesh_file",
-    "fe_degree",
-    "wave_speed",
-    "dt",
-    "n_steps",
-    "output_interval",
-    "output_dir",
-    "scenario_u0",
-    "scenario_u1",
-    "scenario_f",
-    "scenario_bc",
-    "theta",
-    "beta",
-    "gamma",
-    "convergence_mesh_files",
-    "convergence_dt_values",
-    "convergence_reference_case",
-    "convergence_csv_space",
-    "convergence_csv_time"};
+  const std::set<std::string> known_keys = {"mode",
+                                            "method",
+                                            "mesh_file",
+                                            "fe_degree",
+                                            "wave_speed",
+                                            "dt",
+                                            "n_steps",
+                                            "output_interval",
+                                            "output_dir",
+                                            "scenario_u0",
+                                            "scenario_u1",
+                                            "scenario_f",
+                                            "scenario_sigma",
+                                            "scenario_bc",
+                                            "theta",
+                                            "beta",
+                                            "gamma",
+                                            "convergence_mesh_files",
+                                            "convergence_dt_values",
+                                            "convergence_reference_case",
+                                            "convergence_csv_space",
+                                            "convergence_csv_time"};
 
   std::string line;
   int         line_no = 0;
@@ -170,15 +162,13 @@ parse_config_file(const std::string &path)
 
       const auto pos = line.find('=');
       if (pos == std::string::npos)
-        throw std::runtime_error("Malformed config line " +
-                                 std::to_string(line_no) + ": " + line);
+        throw std::runtime_error("Malformed config line " + std::to_string(line_no) + ": " + line);
 
-      const std::string key = trim_copy(line.substr(0, pos));
+      const std::string key   = trim_copy(line.substr(0, pos));
       const std::string value = trim_copy(line.substr(pos + 1));
 
       if (known_keys.find(key) == known_keys.end())
-        throw std::runtime_error("Unknown config key '" + key +
-                                 "' on line " + std::to_string(line_no));
+        throw std::runtime_error("Unknown config key '" + key + "' on line " + std::to_string(line_no));
 
       if (key == "mode")
         cfg.mode = parse_mode(value);
@@ -204,6 +194,8 @@ parse_config_file(const std::string &path)
         cfg.scenario_u1 = value;
       else if (key == "scenario_f")
         cfg.scenario_f = value;
+      else if (key == "scenario_sigma")
+        cfg.scenario_sigma = value;
       else if (key == "scenario_bc")
         cfg.scenario_bc = value;
       else if (key == "theta")
@@ -233,10 +225,10 @@ parse_config_file(const std::string &path)
     return (config_dir / candidate).lexically_normal().string();
   };
 
-  cfg.mesh_file = resolve_relative(cfg.mesh_file);
-  cfg.output_dir = resolve_relative(cfg.output_dir);
+  cfg.mesh_file             = resolve_relative(cfg.mesh_file);
+  cfg.output_dir            = resolve_relative(cfg.output_dir);
   cfg.convergence_csv_space = resolve_relative(cfg.convergence_csv_space);
-  cfg.convergence_csv_time = resolve_relative(cfg.convergence_csv_time);
+  cfg.convergence_csv_time  = resolve_relative(cfg.convergence_csv_time);
   for (auto &mesh : cfg.convergence_mesh_files)
     mesh = resolve_relative(mesh);
 
