@@ -1,11 +1,11 @@
-#include "config.hpp"
-#include "convergence_runner.hpp"
-#include "wave_solver.hpp"
-
 #include <deal.II/base/mpi.h>
 
 #include <iostream>
 #include <string>
+
+#include "config.hpp"
+#include "convergence_runner.hpp"
+#include "wave_solver.hpp"
 
 namespace
 {
@@ -21,9 +21,6 @@ main(int argc, char *argv[])
 {
   try
     {
-      dealii::Utilities::MPI::MPI_InitFinalize mpi_init(argc, argv, 1);
-      const MPI_Comm                           mpi_communicator(MPI_COMM_WORLD);
-
       std::string config_path;
 
       for (int i = 1; i < argc; ++i)
@@ -34,7 +31,7 @@ main(int argc, char *argv[])
               print_help(argv[0]);
               return 0;
             }
-          if (arg == "--config" && i + 1 < argc)
+          if ((arg == "--config" || arg == "-c") && i + 1 < argc)
             {
               config_path = argv[++i];
               continue;
@@ -51,6 +48,11 @@ main(int argc, char *argv[])
           print_help(argv[0]);
           return 1;
         }
+
+      int                                      mpi_argc = 1;
+      char                                   **mpi_argv = argv;
+      dealii::Utilities::MPI::MPI_InitFinalize mpi_init(mpi_argc, mpi_argv, 1);
+      const MPI_Comm                           mpi_communicator(MPI_COMM_WORLD);
 
       const auto config = parse_config_file(config_path);
 
