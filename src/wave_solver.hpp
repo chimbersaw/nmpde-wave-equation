@@ -90,6 +90,13 @@ public:
                       double      dt) const;
 
   void
+  enforce_acceleration_bc(VectorType &a,
+                          double      previous_time,
+                          double      current_time,
+                          double      next_time,
+                          double      dt) const;
+
+  void
   output_results(unsigned int step, double time) const;
 
   bool

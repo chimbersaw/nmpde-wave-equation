@@ -230,6 +230,8 @@ WaveSolver::initialize_state()
   rhs.add(-config.wave_speed * config.wave_speed, ku);
 
   solve_spd_system(mass_matrix, acceleration, rhs);
+  enforce_acceleration_bc(
+    acceleration, -config.dt, 0.0, config.dt, config.dt);
 }
 
 void
@@ -422,6 +424,64 @@ WaveSolver::enforce_velocity_bc(VectorType &v,
     }
 
   v.compress(dealii::VectorOperation::insert);
+}
+
+void
+WaveSolver::enforce_acceleration_bc(VectorType &a,
+                                    const double previous_time,
+                                    const double current_time,
+                                    const double next_time,
+                                    const double dt) const
+{
+  std::map<dealii::types::global_dof_index, double> boundary_prev;
+  std::map<dealii::types::global_dof_index, double> boundary_curr;
+  std::map<dealii::types::global_dof_index, double> boundary_next;
+
+  std::set<dealii::types::boundary_id> boundary_ids;
+  for (const auto &cell : dof_handler.active_cell_iterators())
+    if (cell->is_locally_owned())
+      for (const auto face_no : cell->face_indices())
+        if (cell->face(face_no)->at_boundary())
+          boundary_ids.insert(cell->face(face_no)->boundary_id());
+
+  {
+    auto bc_prev = make_named_function(config.scenario_bc, config.wave_speed);
+    bc_prev->set_time(previous_time);
+    for (const auto id : boundary_ids)
+      dealii::VectorTools::interpolate_boundary_values(
+        dof_handler, id, *bc_prev, boundary_prev);
+  }
+
+  {
+    auto bc_curr = make_named_function(config.scenario_bc, config.wave_speed);
+    bc_curr->set_time(current_time);
+    for (const auto id : boundary_ids)
+      dealii::VectorTools::interpolate_boundary_values(
+        dof_handler, id, *bc_curr, boundary_curr);
+  }
+
+  {
+    auto bc_next = make_named_function(config.scenario_bc, config.wave_speed);
+    bc_next->set_time(next_time);
+    for (const auto id : boundary_ids)
+      dealii::VectorTools::interpolate_boundary_values(
+        dof_handler, id, *bc_next, boundary_next);
+  }
+
+  for (const auto &entry : boundary_curr)
+    {
+      const auto it_prev = boundary_prev.find(entry.first);
+      const auto it_next = boundary_next.find(entry.first);
+      const double g_prev = (it_prev == boundary_prev.end()) ? 0.0 : it_prev->second;
+      const double g_curr = entry.second;
+      const double g_next = (it_next == boundary_next.end()) ? 0.0 : it_next->second;
+      const double a_bc = (g_next - 2.0 * g_curr + g_prev) / (dt * dt);
+
+      if (a.in_local_range(entry.first))
+        a[entry.first] = a_bc;
+    }
+
+  a.compress(dealii::VectorOperation::insert);
 }
 
 bool

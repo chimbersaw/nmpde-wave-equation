@@ -43,19 +43,29 @@ cmake --build cmake-build-release -j
 ### Run with config
 
 ```bash
-mpirun -n 4 ./cmake-build-release/wave-equation --config configs/theta_crank_nicolson.cfg
+mpirun -n 4 ./cmake-build-release/wave-equation --config configs/standing_wave/theta_crank_nicolson.cfg
 ```
 
 ### Available presets
 
-- `configs/theta_forward.cfg`
-- `configs/theta_crank_nicolson.cfg`
-- `configs/theta_backward.cfg`
-- `configs/newmark_avg_accel.cfg`
-- `configs/newmark_central_difference.cfg`
-- `configs/convergence_space.cfg`
-- `configs/convergence_time.cfg`
-- `configs/convergence_both.cfg`
+Standing wave (`configs/standing_wave/`):
+- `theta_forward.cfg`
+- `theta_crank_nicolson.cfg`
+- `theta_backward.cfg`
+- `newmark_avg_accel.cfg`
+- `newmark_central_difference.cfg`
+
+Gaussian pulse (`configs/gaussian_pulse/`):
+- `theta_forward.cfg`
+- `theta_crank_nicolson.cfg`
+- `theta_backward.cfg`
+- `newmark_avg_accel.cfg`
+- `newmark_central_difference.cfg`
+
+Convergence (standing wave, `configs/convergence/`):
+- `convergence_space.cfg`
+- `convergence_time.cfg`
+- `convergence_both.cfg`
 
 ### Convergence outputs
 

@@ -245,13 +245,13 @@ cmake --build cmake-build-release -j
 \subsection{Solve Mode}
 \begin{verbatim}
 mpirun -n 4 ./cmake-build-release/wave-equation \
-  --config configs/theta_crank_nicolson.cfg
+  --config configs/standing_wave/theta_crank_nicolson.cfg
 \end{verbatim}
 
 \subsection{Convergence + Plot}
 \begin{verbatim}
 mpirun -n 4 ./cmake-build-release/wave-equation \
-  --config configs/convergence_both.cfg
+  --config configs/convergence/convergence_both.cfg
 python3 scripts/plot_convergence.py \
   --space-csv results/convergence_space.csv \
   --time-csv results/convergence_time.csv \

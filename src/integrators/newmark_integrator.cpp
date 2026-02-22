@@ -66,6 +66,7 @@ NewmarkTimeIntegrator::run()
           a_new = u_new;
           a_new.add(-1.0, u_pred);
           a_new *= 1.0 / (beta * dt * dt);
+          solver.enforce_acceleration_bc(a_new, t, t_next, t_next + dt, dt);
 
           v_new = v;
           v_new.add(dt * (1.0 - gamma), a);
@@ -86,6 +87,7 @@ NewmarkTimeIntegrator::run()
           rhs.add(-c2, ku);
 
           solver.solve_spd_system(M, a_new, rhs);
+          solver.enforce_acceleration_bc(a_new, t, t_next, t_next + dt, dt);
 
           v_new = v;
           v_new.add(dt * (1.0 - gamma), a);

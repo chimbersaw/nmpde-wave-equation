@@ -95,6 +95,7 @@ ThetaTimeIntegrator::run()
       rhs_acc = force_np1;
       rhs_acc.add(-c2, ku_new);
       solver.solve_spd_system(M, a, rhs_acc);
+      solver.enforce_acceleration_bc(a, t, t_next, t_next + dt, dt);
 
       u = u_new;
       v = v_new;
