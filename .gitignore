@@ -42,3 +42,7 @@ misc/
 .idea
 .DS_Store
 report/
+videos/
+slides/
+labs/
+tmp.txt

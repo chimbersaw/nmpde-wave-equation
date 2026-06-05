@@ -240,5 +240,5 @@ make_named_function(const std::string &name, const double wave_speed)
   if (name == "periodic_center_source" || name == "periodic_center_source_5x5")
     return std::make_shared<PeriodicCenterSource5x5Function>();
 
-  throw std::runtime_error("Unknown scenario function name: " + name);
+  throw std::runtime_error("Unknown function name: " + name);
 }

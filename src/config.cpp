@@ -136,11 +136,11 @@ parse_config_file(const std::string &path)
                                             "n_steps",
                                             "output_interval",
                                             "output_dir",
-                                            "scenario_u0",
-                                            "scenario_u1",
-                                            "scenario_f",
-                                            "scenario_sigma",
-                                            "scenario_bc",
+                                            "u0",
+                                            "u1",
+                                            "f",
+                                            "sigma",
+                                            "bc",
                                             "theta",
                                             "beta",
                                             "gamma",
@@ -187,16 +187,16 @@ parse_config_file(const std::string &path)
         cfg.output_interval = std::stoi(value);
       else if (key == "output_dir")
         cfg.output_dir = value;
-      else if (key == "scenario_u0")
-        cfg.scenario_u0 = value;
-      else if (key == "scenario_u1")
-        cfg.scenario_u1 = value;
-      else if (key == "scenario_f")
-        cfg.scenario_f = value;
-      else if (key == "scenario_sigma")
-        cfg.scenario_sigma = value;
-      else if (key == "scenario_bc")
-        cfg.scenario_bc = value;
+      else if (key == "u0")
+        cfg.u0 = value;
+      else if (key == "u1")
+        cfg.u1 = value;
+      else if (key == "f")
+        cfg.f = value;
+      else if (key == "sigma")
+        cfg.sigma = value;
+      else if (key == "bc")
+        cfg.bc = value;
       else if (key == "theta")
         cfg.theta = std::stod(value);
       else if (key == "beta")

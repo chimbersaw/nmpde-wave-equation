@@ -48,10 +48,10 @@ WaveSolver::WaveSolver(const WaveProblemConfig &config, MPI_Comm mpi_communicato
   , dof_handler(triangulation)
   , quadrature(static_cast<unsigned int>(config.fe_degree + 2))
 {
-  u0_function      = make_named_function(config.scenario_u0, config.wave_speed);
-  u1_function      = make_named_function(config.scenario_u1, config.wave_speed);
-  forcing_function = make_named_function(config.scenario_f, config.wave_speed);
-  sigma_function   = make_named_function(config.scenario_sigma, config.wave_speed);
+  u0_function      = make_named_function(config.u0, config.wave_speed);
+  u1_function      = make_named_function(config.u1, config.wave_speed);
+  forcing_function = make_named_function(config.f, config.wave_speed);
+  sigma_function   = make_named_function(config.sigma, config.wave_speed);
 
   setup_triangulation_and_dofs();
   assemble_system_matrices();
@@ -172,7 +172,7 @@ WaveSolver::assemble_system_matrices()
                                 dealii::update_values | dealii::update_gradients | dealii::update_JxW_values);
   const dealii::QGauss<1> face_quadrature(static_cast<unsigned int>(config.fe_degree + 2));
   dealii::FEFaceValues<2> fe_face_values(fe, face_quadrature, dealii::update_values | dealii::update_JxW_values);
-  const bool              absorbing_bc = is_absorbing_boundary_condition(config.scenario_bc);
+  const bool              absorbing_bc = is_absorbing_boundary_condition(config.bc);
 
   const unsigned int dofs_per_cell   = fe.n_dofs_per_cell();
   const unsigned int n_q_points      = quadrature.size();
@@ -314,13 +314,13 @@ WaveSolver::build_constraints(const double                                      
 
   dealii::DoFTools::make_hanging_node_constraints(dof_handler, constraints);
 
-  if (is_absorbing_boundary_condition(config.scenario_bc))
+  if (is_absorbing_boundary_condition(config.bc))
     {
       constraints.close();
       return;
     }
 
-  auto bc_function = make_named_function(config.scenario_bc, config.wave_speed);
+  auto bc_function = make_named_function(config.bc, config.wave_speed);
   bc_function->set_time(time);
 
   std::set<dealii::types::boundary_id> boundary_ids;
@@ -402,14 +402,14 @@ WaveSolver::enforce_velocity_bc(VectorType  &v,
                                 const double current_time,
                                 const double dt) const
 {
-  if (is_absorbing_boundary_condition(config.scenario_bc))
+  if (is_absorbing_boundary_condition(config.bc))
     return;
 
   std::map<dealii::types::global_dof_index, double> boundary_old;
   std::map<dealii::types::global_dof_index, double> boundary_new;
 
   {
-    auto bc_old = make_named_function(config.scenario_bc, config.wave_speed);
+    auto bc_old = make_named_function(config.bc, config.wave_speed);
     bc_old->set_time(previous_time);
 
     std::set<dealii::types::boundary_id> boundary_ids;
@@ -424,7 +424,7 @@ WaveSolver::enforce_velocity_bc(VectorType  &v,
   }
 
   {
-    auto bc_new = make_named_function(config.scenario_bc, config.wave_speed);
+    auto bc_new = make_named_function(config.bc, config.wave_speed);
     bc_new->set_time(current_time);
 
     std::set<dealii::types::boundary_id> boundary_ids;
@@ -459,7 +459,7 @@ WaveSolver::enforce_acceleration_bc(VectorType  &a,
                                     const double next_time,
                                     const double dt) const
 {
-  if (is_absorbing_boundary_condition(config.scenario_bc))
+  if (is_absorbing_boundary_condition(config.bc))
     return;
 
   std::map<dealii::types::global_dof_index, double> boundary_prev;
@@ -474,21 +474,21 @@ WaveSolver::enforce_acceleration_bc(VectorType  &a,
           boundary_ids.insert(cell->face(face_no)->boundary_id());
 
   {
-    auto bc_prev = make_named_function(config.scenario_bc, config.wave_speed);
+    auto bc_prev = make_named_function(config.bc, config.wave_speed);
     bc_prev->set_time(previous_time);
     for (const auto id : boundary_ids)
       dealii::VectorTools::interpolate_boundary_values(dof_handler, id, *bc_prev, boundary_prev);
   }
 
   {
-    auto bc_curr = make_named_function(config.scenario_bc, config.wave_speed);
+    auto bc_curr = make_named_function(config.bc, config.wave_speed);
     bc_curr->set_time(current_time);
     for (const auto id : boundary_ids)
       dealii::VectorTools::interpolate_boundary_values(dof_handler, id, *bc_curr, boundary_curr);
   }
 
   {
-    auto bc_next = make_named_function(config.scenario_bc, config.wave_speed);
+    auto bc_next = make_named_function(config.bc, config.wave_speed);
     bc_next->set_time(next_time);
     for (const auto id : boundary_ids)
       dealii::VectorTools::interpolate_boundary_values(dof_handler, id, *bc_next, boundary_next);

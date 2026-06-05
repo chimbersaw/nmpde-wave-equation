@@ -75,8 +75,8 @@ Core:
 - `method = theta | newmark`
 - `mesh_file`, `fe_degree`, `wave_speed`, `dt`, `n_steps`
 - `output_interval`, `output_dir`
-- `scenario_u0`, `scenario_u1`, `scenario_f`, `scenario_bc`
-- optional damping profile: `scenario_sigma` (default `zero`)
+- `u0`, `u1`, `f`, `bc`
+- optional damping profile: `sigma` (default `zero`)
 
 Method-specific:
 - `theta` for `method=theta`
@@ -90,7 +90,7 @@ Convergence-specific:
 - `convergence_csv_time`
 
 Absorbing boundary:
-- set `scenario_bc = absorbing` to activate the first-order absorbing boundary contribution.
+- set `bc = absorbing` to activate the first-order absorbing boundary contribution.
 
 ### Convergence outputs
 

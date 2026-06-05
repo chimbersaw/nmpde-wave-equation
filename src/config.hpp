@@ -30,11 +30,11 @@ struct WaveProblemConfig
   int         output_interval = 10;
   std::string output_dir      = "solution";
 
-  std::string scenario_u0    = "standing_wave";
-  std::string scenario_u1    = "standing_wave_velocity";
-  std::string scenario_f     = "zero";
-  std::string scenario_sigma = "zero";
-  std::string scenario_bc    = "zero_dirichlet";
+  std::string u0    = "standing_wave";
+  std::string u1    = "standing_wave_velocity";
+  std::string f     = "zero";
+  std::string sigma = "zero";
+  std::string bc    = "zero_dirichlet";
 
   double theta = 0.5;
   double beta  = 0.25;
