@@ -19,7 +19,6 @@ ThetaTimeIntegrator::run()
   const auto &config = solver.get_config();
   const auto &M      = solver.get_mass_matrix();
   const auto &K      = solver.get_stiffness_matrix();
-  const auto &C      = solver.get_damping_matrix();
 
   const double dt = config.dt;
   const double c2 = config.wave_speed * config.wave_speed;
@@ -32,7 +31,6 @@ ThetaTimeIntegrator::run()
   if (theta > 0.0)
     {
       effective_matrix.copy_from(M);
-      effective_matrix.add(theta * dt, C);
       effective_matrix.add(c2 * theta * theta * dt * dt, K);
     }
 
@@ -55,10 +53,6 @@ ThetaTimeIntegrator::run()
 
       if (theta > 0.0)
         {
-          auto cv = solver.create_owned_vector();
-          C.vmult(cv, v);
-          rhs.add(-dt * (1.0 - theta), cv);
-
           auto kv = solver.create_owned_vector();
           K.vmult(kv, v);
           rhs.add(-c2 * theta * (1.0 - theta) * dt * dt, kv);
@@ -82,10 +76,7 @@ ThetaTimeIntegrator::run()
       auto rhs_acc = solver.create_owned_vector();
       auto ku_new  = solver.create_owned_vector();
       K.vmult(ku_new, u_new);
-      rhs_acc     = force_np1;
-      auto cv_new = solver.create_owned_vector();
-      C.vmult(cv_new, v_new);
-      rhs_acc.add(-1.0, cv_new);
+      rhs_acc = force_np1;
       rhs_acc.add(-c2, ku_new);
       solver.solve_spd_system(M, a, rhs_acc);
       solver.enforce_acceleration_bc(a, t, t_next, t_next + dt, dt);

@@ -60,9 +60,6 @@ public:
   const MatrixType &
   get_stiffness_matrix() const;
 
-  const MatrixType &
-  get_damping_matrix() const;
-
   VectorType &
   get_solution();
 
@@ -142,7 +139,6 @@ private:
 
   MatrixType mass_matrix;
   MatrixType stiffness_matrix;
-  MatrixType damping_matrix;
 
   VectorType solution;
   VectorType velocity;
@@ -151,7 +147,6 @@ private:
   std::shared_ptr<dealii::Function<dim>> u0_function;
   std::shared_ptr<dealii::Function<dim>> u1_function;
   std::shared_ptr<dealii::Function<dim>> forcing_function;
-  std::shared_ptr<dealii::Function<dim>> sigma_function;
 
   bool output_enabled = true;
 };

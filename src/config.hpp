@@ -30,11 +30,10 @@ struct WaveProblemConfig
   int         output_interval = 10;
   std::string output_dir      = "solution";
 
-  std::string u0    = "standing_wave";
-  std::string u1    = "standing_wave_velocity";
-  std::string f     = "zero";
-  std::string sigma = "zero";
-  std::string bc    = "zero_dirichlet";
+  std::string u0 = "standing_wave_5x5";
+  std::string u1 = "standing_wave_5x5_velocity";
+  std::string f  = "zero";
+  std::string bc = "zero_dirichlet";
 
   double theta = 0.5;
   double beta  = 0.25;
@@ -42,7 +41,7 @@ struct WaveProblemConfig
 
   std::vector<std::string> convergence_mesh_files;
   std::vector<double>      convergence_dt_values;
-  std::string              convergence_reference_case = "standing_wave_exact";
+  std::string              convergence_reference_case = "standing_wave_5x5_exact";
   std::string              convergence_csv_space      = "results/convergence_space.csv";
   std::string              convergence_csv_time       = "results/convergence_time.csv";
 };

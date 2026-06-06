@@ -139,7 +139,6 @@ parse_config_file(const std::string &path)
                                             "u0",
                                             "u1",
                                             "f",
-                                            "sigma",
                                             "bc",
                                             "theta",
                                             "beta",
@@ -193,8 +192,6 @@ parse_config_file(const std::string &path)
         cfg.u1 = value;
       else if (key == "f")
         cfg.f = value;
-      else if (key == "sigma")
-        cfg.sigma = value;
       else if (key == "bc")
         cfg.bc = value;
       else if (key == "theta")

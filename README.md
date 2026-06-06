@@ -53,15 +53,14 @@ Standing wave (`configs/standing_wave/`):
 - `theta_crank_nicolson.cfg`
 - `theta_backward.cfg`
 - `newmark_avg_accel.cfg`
-- `newmark_central_difference.cfg`
+- `newmark_leapfrog.cfg`
 
 Gaussian pulse (`configs/gaussian_pulse/`):
 - `theta_forward.cfg`
 - `theta_crank_nicolson.cfg`
 - `theta_backward.cfg`
 - `newmark_avg_accel.cfg`
-- `newmark_central_difference.cfg`
-- `periodic_center_absorbing.cfg` (periodic center source with absorbing boundary)
+- `newmark_leapfrog.cfg`
 
 Convergence (standing wave, `configs/convergence/`):
 - `convergence_space.cfg`
@@ -76,7 +75,6 @@ Core:
 - `mesh_file`, `fe_degree`, `wave_speed`, `dt`, `n_steps`
 - `output_interval`, `output_dir`
 - `u0`, `u1`, `f`, `bc`
-- optional damping profile: `sigma` (default `zero`)
 
 Method-specific:
 - `theta` for `method=theta`
@@ -88,9 +86,6 @@ Convergence-specific:
 - `convergence_reference_case`
 - `convergence_csv_space`
 - `convergence_csv_time`
-
-Absorbing boundary:
-- set `bc = absorbing` to activate the first-order absorbing boundary contribution.
 
 ### Convergence outputs
 

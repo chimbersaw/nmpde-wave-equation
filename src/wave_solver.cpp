@@ -30,15 +30,6 @@
 #include "newmark_integrator.hpp"
 #include "theta_integrator.hpp"
 
-namespace
-{
-  bool
-  is_absorbing_boundary_condition(const std::string &bc_name)
-  {
-    return (bc_name == "absorbing");
-  }
-} // namespace
-
 WaveSolver::WaveSolver(const WaveProblemConfig &config, MPI_Comm mpi_communicator)
   : mpi_communicator(mpi_communicator)
   , config(config)
@@ -51,7 +42,6 @@ WaveSolver::WaveSolver(const WaveProblemConfig &config, MPI_Comm mpi_communicato
   u0_function      = make_named_function(config.u0, config.wave_speed);
   u1_function      = make_named_function(config.u1, config.wave_speed);
   forcing_function = make_named_function(config.f, config.wave_speed);
-  sigma_function   = make_named_function(config.sigma, config.wave_speed);
 
   setup_triangulation_and_dofs();
   assemble_system_matrices();
@@ -80,12 +70,6 @@ const WaveSolver::MatrixType &
 WaveSolver::get_stiffness_matrix() const
 {
   return stiffness_matrix;
-}
-
-const WaveSolver::MatrixType &
-WaveSolver::get_damping_matrix() const
-{
-  return damping_matrix;
 }
 
 WaveSolver::VectorType &
@@ -155,7 +139,6 @@ WaveSolver::setup_triangulation_and_dofs()
 
   mass_matrix.reinit(locally_owned_dofs, locally_owned_dofs, dsp, mpi_communicator);
   stiffness_matrix.reinit(locally_owned_dofs, locally_owned_dofs, dsp, mpi_communicator);
-  damping_matrix.reinit(locally_owned_dofs, locally_owned_dofs, dsp, mpi_communicator);
 
   solution.reinit(locally_owned_dofs, mpi_communicator);
   velocity.reinit(locally_owned_dofs, mpi_communicator);
@@ -167,22 +150,16 @@ WaveSolver::setup_triangulation_and_dofs()
 void
 WaveSolver::assemble_system_matrices()
 {
-  dealii::FEValues<dim>         fe_values(fe,
-                                          quadrature,
-                                          dealii::update_values | dealii::update_gradients | dealii::update_JxW_values);
-  const dealii::QGauss<dim - 1> face_quadrature(static_cast<unsigned int>(config.fe_degree + 2));
-  dealii::FEFaceValues<dim>     fe_face_values(fe, face_quadrature, dealii::update_values | dealii::update_JxW_values);
-  const bool                    absorbing_bc = is_absorbing_boundary_condition(config.bc);
+  dealii::FEValues<dim> fe_values(fe,
+                                  quadrature,
+                                  dealii::update_values | dealii::update_gradients | dealii::update_JxW_values);
 
-  const unsigned int dofs_per_cell   = fe.n_dofs_per_cell();
-  const unsigned int n_q_points      = quadrature.size();
-  const unsigned int n_face_q_points = face_quadrature.size();
+  const unsigned int dofs_per_cell = fe.n_dofs_per_cell();
+  const unsigned int n_q_points    = quadrature.size();
 
   dealii::FullMatrix<double>                   cell_mass(dofs_per_cell, dofs_per_cell);
   dealii::FullMatrix<double>                   cell_stiffness(dofs_per_cell, dofs_per_cell);
-  dealii::FullMatrix<double>                   cell_damping(dofs_per_cell, dofs_per_cell);
   std::vector<dealii::types::global_dof_index> local_dof_indices(dofs_per_cell);
-  std::vector<double>                          sigma_values(n_q_points, 0.0);
 
   for (const auto &cell : dof_handler.active_cell_iterators())
     {
@@ -191,9 +168,7 @@ WaveSolver::assemble_system_matrices()
 
       cell_mass      = 0.0;
       cell_stiffness = 0.0;
-      cell_damping   = 0.0;
       fe_values.reinit(cell);
-      sigma_function->value_list(fe_values.get_quadrature_points(), sigma_values);
 
       for (unsigned int q = 0; q < n_q_points; ++q)
         for (unsigned int i = 0; i < dofs_per_cell; ++i)
@@ -202,24 +177,7 @@ WaveSolver::assemble_system_matrices()
               cell_mass(i, j) += fe_values.shape_value(i, q) * fe_values.shape_value(j, q) * fe_values.JxW(q);
 
               cell_stiffness(i, j) += fe_values.shape_grad(i, q) * fe_values.shape_grad(j, q) * fe_values.JxW(q);
-
-              cell_damping(i, j) +=
-                sigma_values[q] * fe_values.shape_value(i, q) * fe_values.shape_value(j, q) * fe_values.JxW(q);
             }
-
-      if (absorbing_bc)
-        {
-          for (const auto face_no : cell->face_indices())
-            if (cell->face(face_no)->at_boundary())
-              {
-                fe_face_values.reinit(cell, face_no);
-                for (unsigned int q = 0; q < n_face_q_points; ++q)
-                  for (unsigned int i = 0; i < dofs_per_cell; ++i)
-                    for (unsigned int j = 0; j < dofs_per_cell; ++j)
-                      cell_damping(i, j) += config.wave_speed * fe_face_values.shape_value(i, q) *
-                                            fe_face_values.shape_value(j, q) * fe_face_values.JxW(q);
-              }
-        }
 
       cell->get_dof_indices(local_dof_indices);
       for (unsigned int i = 0; i < dofs_per_cell; ++i)
@@ -227,13 +185,11 @@ WaveSolver::assemble_system_matrices()
           {
             mass_matrix.add(local_dof_indices[i], local_dof_indices[j], cell_mass(i, j));
             stiffness_matrix.add(local_dof_indices[i], local_dof_indices[j], cell_stiffness(i, j));
-            damping_matrix.add(local_dof_indices[i], local_dof_indices[j], cell_damping(i, j));
           }
     }
 
   mass_matrix.compress(dealii::VectorOperation::add);
   stiffness_matrix.compress(dealii::VectorOperation::add);
-  damping_matrix.compress(dealii::VectorOperation::add);
 }
 
 void
@@ -253,9 +209,6 @@ WaveSolver::initialize_state()
 
   VectorType rhs = create_owned_vector();
   rhs            = f0;
-  VectorType cv  = create_owned_vector();
-  damping_matrix.vmult(cv, velocity);
-  rhs.add(-1.0, cv);
   rhs.add(-config.wave_speed * config.wave_speed, ku);
 
   solve_spd_system(mass_matrix, acceleration, rhs);
@@ -313,12 +266,6 @@ WaveSolver::build_constraints(const double                                      
   boundary_values.clear();
 
   dealii::DoFTools::make_hanging_node_constraints(dof_handler, constraints);
-
-  if (is_absorbing_boundary_condition(config.bc))
-    {
-      constraints.close();
-      return;
-    }
 
   auto bc_function = make_named_function(config.bc, config.wave_speed);
   bc_function->set_time(time);
@@ -402,9 +349,6 @@ WaveSolver::enforce_velocity_bc(VectorType  &v,
                                 const double current_time,
                                 const double dt) const
 {
-  if (is_absorbing_boundary_condition(config.bc))
-    return;
-
   std::map<dealii::types::global_dof_index, double> boundary_old;
   std::map<dealii::types::global_dof_index, double> boundary_new;
 
@@ -459,9 +403,6 @@ WaveSolver::enforce_acceleration_bc(VectorType  &a,
                                     const double next_time,
                                     const double dt) const
 {
-  if (is_absorbing_boundary_condition(config.bc))
-    return;
-
   std::map<dealii::types::global_dof_index, double> boundary_prev;
   std::map<dealii::types::global_dof_index, double> boundary_curr;
   std::map<dealii::types::global_dof_index, double> boundary_next;
