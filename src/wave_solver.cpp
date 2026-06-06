@@ -129,9 +129,9 @@ WaveSolver::create_matrix_like_system() const
 void
 WaveSolver::setup_triangulation_and_dofs()
 {
-  dealii::Triangulation<2> serial_triangulation;
+  dealii::Triangulation<dim> serial_triangulation;
 
-  dealii::GridIn<2> grid_in;
+  dealii::GridIn<dim> grid_in;
   grid_in.attach_triangulation(serial_triangulation);
   grid_in.read_msh(config.mesh_file);
 
@@ -167,12 +167,12 @@ WaveSolver::setup_triangulation_and_dofs()
 void
 WaveSolver::assemble_system_matrices()
 {
-  dealii::FEValues<2>     fe_values(fe,
-                                quadrature,
-                                dealii::update_values | dealii::update_gradients | dealii::update_JxW_values);
-  const dealii::QGauss<1> face_quadrature(static_cast<unsigned int>(config.fe_degree + 2));
-  dealii::FEFaceValues<2> fe_face_values(fe, face_quadrature, dealii::update_values | dealii::update_JxW_values);
-  const bool              absorbing_bc = is_absorbing_boundary_condition(config.bc);
+  dealii::FEValues<dim>         fe_values(fe,
+                                          quadrature,
+                                          dealii::update_values | dealii::update_gradients | dealii::update_JxW_values);
+  const dealii::QGauss<dim - 1> face_quadrature(static_cast<unsigned int>(config.fe_degree + 2));
+  dealii::FEFaceValues<dim>     fe_face_values(fe, face_quadrature, dealii::update_values | dealii::update_JxW_values);
+  const bool                    absorbing_bc = is_absorbing_boundary_condition(config.bc);
 
   const unsigned int dofs_per_cell   = fe.n_dofs_per_cell();
   const unsigned int n_q_points      = quadrature.size();
@@ -269,9 +269,9 @@ WaveSolver::assemble_force(const double time, VectorType &force) const
 
   forcing_function->set_time(time);
 
-  dealii::FEValues<2> fe_values(fe,
-                                quadrature,
-                                dealii::update_values | dealii::update_quadrature_points | dealii::update_JxW_values);
+  dealii::FEValues<dim> fe_values(fe,
+                                  quadrature,
+                                  dealii::update_values | dealii::update_quadrature_points | dealii::update_JxW_values);
 
   const unsigned int dofs_per_cell = fe.n_dofs_per_cell();
   const unsigned int n_q_points    = quadrature.size();
@@ -538,7 +538,7 @@ WaveSolver::output_results(const unsigned int step, const double) const
   v_relevant.reinit(locally_owned_dofs, locally_relevant_dofs, mpi_communicator);
   v_relevant = velocity;
 
-  dealii::DataOut<2> data_out;
+  dealii::DataOut<dim> data_out;
   data_out.attach_dof_handler(dof_handler);
   data_out.add_data_vector(u_relevant, "u");
   data_out.add_data_vector(v_relevant, "v");
@@ -582,7 +582,7 @@ WaveSolver::compute_l2_error(const double time) const
                                             u_relevant,
                                             *exact,
                                             difference_per_cell,
-                                            dealii::QGaussSimplex<2>(static_cast<unsigned int>(config.fe_degree + 3)),
+                                            dealii::QGaussSimplex<dim>(static_cast<unsigned int>(config.fe_degree + 3)),
                                             dealii::VectorTools::L2_norm);
 
   double local_sq = 0.0;
@@ -598,12 +598,12 @@ WaveSolver::compute_l2_error(const double time) const
   if (std::isfinite(vector_tools_l2))
     return vector_tools_l2;
 
-  dealii::FEValues<2> fe_values(fe,
-                                quadrature,
-                                dealii::update_values | dealii::update_gradients | dealii::update_quadrature_points |
-                                  dealii::update_JxW_values);
-  const unsigned int  dofs_per_cell = fe.n_dofs_per_cell();
-  const unsigned int  n_q_points    = quadrature.size();
+  dealii::FEValues<dim> fe_values(fe,
+                                  quadrature,
+                                  dealii::update_values | dealii::update_gradients | dealii::update_quadrature_points |
+                                    dealii::update_JxW_values);
+  const unsigned int    dofs_per_cell = fe.n_dofs_per_cell();
+  const unsigned int    n_q_points    = quadrature.size();
 
   std::vector<dealii::types::global_dof_index> local_dof_indices(dofs_per_cell);
   std::vector<double>                          exact_values(n_q_points);
@@ -648,7 +648,7 @@ WaveSolver::compute_h1_error(const double time) const
                                             u_relevant,
                                             *exact,
                                             difference_per_cell,
-                                            dealii::QGaussSimplex<2>(static_cast<unsigned int>(config.fe_degree + 3)),
+                                            dealii::QGaussSimplex<dim>(static_cast<unsigned int>(config.fe_degree + 3)),
                                             dealii::VectorTools::H1_norm);
 
   double local_sq = 0.0;
@@ -664,16 +664,16 @@ WaveSolver::compute_h1_error(const double time) const
   if (std::isfinite(vector_tools_h1))
     return vector_tools_h1;
 
-  dealii::FEValues<2> fe_values(fe,
-                                quadrature,
-                                dealii::update_values | dealii::update_gradients | dealii::update_quadrature_points |
-                                  dealii::update_JxW_values);
-  const unsigned int  dofs_per_cell = fe.n_dofs_per_cell();
-  const unsigned int  n_q_points    = quadrature.size();
+  dealii::FEValues<dim> fe_values(fe,
+                                  quadrature,
+                                  dealii::update_values | dealii::update_gradients | dealii::update_quadrature_points |
+                                    dealii::update_JxW_values);
+  const unsigned int    dofs_per_cell = fe.n_dofs_per_cell();
+  const unsigned int    n_q_points    = quadrature.size();
 
   std::vector<dealii::types::global_dof_index> local_dof_indices(dofs_per_cell);
   std::vector<double>                          exact_values(n_q_points);
-  std::vector<dealii::Tensor<1, 2>>            exact_gradients(n_q_points);
+  std::vector<dealii::Tensor<1, dim>>          exact_gradients(n_q_points);
 
   double local_sq_manual = 0.0;
   for (const auto &cell : dof_handler.active_cell_iterators())
@@ -686,8 +686,8 @@ WaveSolver::compute_h1_error(const double time) const
 
         for (unsigned int q = 0; q < n_q_points; ++q)
           {
-            double               uh_q = 0.0;
-            dealii::Tensor<1, 2> grad_uh_q;
+            double                 uh_q = 0.0;
+            dealii::Tensor<1, dim> grad_uh_q;
             for (unsigned int i = 0; i < dofs_per_cell; ++i)
               {
                 const double u_i = u_relevant(local_dof_indices[i]);

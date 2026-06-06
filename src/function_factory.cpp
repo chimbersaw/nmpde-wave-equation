@@ -12,42 +12,44 @@ namespace
   using dealii::Point;
   using dealii::Tensor;
 
-  class ZeroScalarFunction : public Function<2>
+  static constexpr unsigned int dim = WaveSolver::dim;
+
+  class ZeroScalarFunction : public Function<dim>
   {
   public:
     double
-    value(const Point<2> &, const unsigned int) const override
+    value(const Point<dim> &, const unsigned int) const override
     {
       return 0.0;
     }
 
-    Tensor<1, 2>
-    gradient(const Point<2> &, const unsigned int) const override
+    Tensor<1, dim>
+    gradient(const Point<dim> &, const unsigned int) const override
     {
       return {};
     }
   };
 
-  class StandingWaveFunction : public Function<2>
+  class StandingWaveFunction : public Function<dim>
   {
   public:
     explicit StandingWaveFunction(const double wave_speed)
-      : Function<2>()
+      : Function<dim>()
       , omega(wave_speed * dealii::numbers::PI * std::sqrt(2.0))
     {}
 
     double
-    value(const Point<2> &p, const unsigned int) const override
+    value(const Point<dim> &p, const unsigned int) const override
     {
       return std::sin(dealii::numbers::PI * p[0]) * std::sin(dealii::numbers::PI * p[1]) *
              std::cos(omega * this->get_time());
     }
 
-    Tensor<1, 2>
-    gradient(const Point<2> &p, const unsigned int) const override
+    Tensor<1, dim>
+    gradient(const Point<dim> &p, const unsigned int) const override
     {
-      Tensor<1, 2> g;
-      const double factor = std::cos(omega * this->get_time());
+      Tensor<1, dim> g;
+      const double   factor = std::cos(omega * this->get_time());
       g[0] = dealii::numbers::PI * std::cos(dealii::numbers::PI * p[0]) * std::sin(dealii::numbers::PI * p[1]) * factor;
       g[1] = dealii::numbers::PI * std::sin(dealii::numbers::PI * p[0]) * std::cos(dealii::numbers::PI * p[1]) * factor;
       return g;
@@ -57,16 +59,16 @@ namespace
     const double omega;
   };
 
-  class StandingWaveVelocityFunction : public Function<2>
+  class StandingWaveVelocityFunction : public Function<dim>
   {
   public:
     explicit StandingWaveVelocityFunction(const double wave_speed)
-      : Function<2>()
+      : Function<dim>()
       , omega(wave_speed * dealii::numbers::PI * std::sqrt(2.0))
     {}
 
     double
-    value(const Point<2> &p, const unsigned int) const override
+    value(const Point<dim> &p, const unsigned int) const override
     {
       return -omega * std::sin(dealii::numbers::PI * p[0]) * std::sin(dealii::numbers::PI * p[1]) *
              std::sin(omega * this->get_time());
@@ -76,17 +78,17 @@ namespace
     const double omega;
   };
 
-  class StandingWaveForcingFunction : public Function<2>
+  class StandingWaveForcingFunction : public Function<dim>
   {
   public:
     explicit StandingWaveForcingFunction(const double wave_speed)
-      : Function<2>()
+      : Function<dim>()
       , wave_speed(wave_speed)
       , omega(wave_speed * dealii::numbers::PI * std::sqrt(2.0))
     {}
 
     double
-    value(const Point<2> &p, const unsigned int) const override
+    value(const Point<dim> &p, const unsigned int) const override
     {
       const double spatial  = std::sin(dealii::numbers::PI * p[0]) * std::sin(dealii::numbers::PI * p[1]);
       const double temporal = std::cos(omega * this->get_time());
@@ -100,30 +102,30 @@ namespace
     const double omega;
   };
 
-  class StandingWave5x5Function : public Function<2>
+  class StandingWave5x5Function : public Function<dim>
   {
   public:
     explicit StandingWave5x5Function(const double wave_speed)
-      : Function<2>()
+      : Function<dim>()
       , omega(wave_speed * dealii::numbers::PI * std::sqrt(2.0) / 5.0)
     {}
 
     double
-    value(const Point<2> &p, const unsigned int) const override
+    value(const Point<dim> &p, const unsigned int) const override
     {
       return std::sin((dealii::numbers::PI / 5.0) * p[0]) * std::sin((dealii::numbers::PI / 5.0) * p[1]) *
              std::cos(omega * this->get_time());
     }
 
-    Tensor<1, 2>
-    gradient(const Point<2> &p, const unsigned int) const override
+    Tensor<1, dim>
+    gradient(const Point<dim> &p, const unsigned int) const override
     {
-      Tensor<1, 2> g;
-      const double factor = std::cos(omega * this->get_time());
-      g[0]                = (dealii::numbers::PI / 5.0) * std::cos((dealii::numbers::PI / 5.0) * p[0]) *
-             std::sin((dealii::numbers::PI / 5.0) * p[1]) * factor;
-      g[1] = (dealii::numbers::PI / 5.0) * std::sin((dealii::numbers::PI / 5.0) * p[0]) *
-             std::cos((dealii::numbers::PI / 5.0) * p[1]) * factor;
+      Tensor<1, dim> g;
+      const double   factor = std::cos(omega * this->get_time());
+      g[0]                  = (dealii::numbers::PI / 5.0) * std::cos((dealii::numbers::PI / 5.0) * p[0]) *
+                              std::sin((dealii::numbers::PI / 5.0) * p[1]) * factor;
+      g[1]                  = (dealii::numbers::PI / 5.0) * std::sin((dealii::numbers::PI / 5.0) * p[0]) *
+                              std::cos((dealii::numbers::PI / 5.0) * p[1]) * factor;
       return g;
     }
 
@@ -131,16 +133,16 @@ namespace
     const double omega;
   };
 
-  class StandingWave5x5VelocityFunction : public Function<2>
+  class StandingWave5x5VelocityFunction : public Function<dim>
   {
   public:
     explicit StandingWave5x5VelocityFunction(const double wave_speed)
-      : Function<2>()
+      : Function<dim>()
       , omega(wave_speed * dealii::numbers::PI * std::sqrt(2.0) / 5.0)
     {}
 
     double
-    value(const Point<2> &p, const unsigned int) const override
+    value(const Point<dim> &p, const unsigned int) const override
     {
       return -omega * std::sin((dealii::numbers::PI / 5.0) * p[0]) * std::sin((dealii::numbers::PI / 5.0) * p[1]) *
              std::sin(omega * this->get_time());
@@ -150,17 +152,17 @@ namespace
     const double omega;
   };
 
-  class StandingWave5x5ForcingFunction : public Function<2>
+  class StandingWave5x5ForcingFunction : public Function<dim>
   {
   public:
     explicit StandingWave5x5ForcingFunction(const double wave_speed)
-      : Function<2>()
+      : Function<dim>()
       , wave_speed(wave_speed)
       , omega(wave_speed * dealii::numbers::PI * std::sqrt(2.0) / 5.0)
     {}
 
     double
-    value(const Point<2> &p, const unsigned int) const override
+    value(const Point<dim> &p, const unsigned int) const override
     {
       const double spatial =
         std::sin((dealii::numbers::PI / 5.0) * p[0]) * std::sin((dealii::numbers::PI / 5.0) * p[1]);
@@ -175,11 +177,11 @@ namespace
     const double omega;
   };
 
-  class GaussianPulseFunction : public Function<2>
+  class GaussianPulseFunction : public Function<dim>
   {
   public:
     double
-    value(const Point<2> &p, const unsigned int) const override
+    value(const Point<dim> &p, const unsigned int) const override
     {
       const double dx = p[0] - 2.5;
       const double dy = p[1] - 2.5;
@@ -187,11 +189,11 @@ namespace
     }
   };
 
-  class PeriodicCenterSource5x5Function : public Function<2>
+  class PeriodicCenterSource5x5Function : public Function<dim>
   {
   public:
     double
-    value(const Point<2> &p, const unsigned int) const override
+    value(const Point<dim> &p, const unsigned int) const override
     {
       const double dx = p[0] - 2.5;
       const double dy = p[1] - 2.5;
@@ -216,7 +218,7 @@ namespace
   };
 } // namespace
 
-std::shared_ptr<dealii::Function<2>>
+std::shared_ptr<dealii::Function<WaveSolver::dim>>
 make_named_function(const std::string &name, const double wave_speed)
 {
   if (name == "zero" || name == "zero_dirichlet")

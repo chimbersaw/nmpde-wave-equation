@@ -35,6 +35,8 @@ struct ConvergenceResult
 class WaveSolver
 {
 public:
+  static constexpr unsigned int dim = 2;
+
   using VectorType = dealii::TrilinosWrappers::MPI::Vector;
   using MatrixType = dealii::TrilinosWrappers::SparseMatrix;
 
@@ -130,10 +132,10 @@ private:
 
   dealii::ConditionalOStream pcout;
 
-  dealii::parallel::fullydistributed::Triangulation<2> triangulation;
-  dealii::FE_SimplexP<2>                               fe;
-  dealii::DoFHandler<2>                                dof_handler;
-  dealii::QGaussSimplex<2>                             quadrature;
+  dealii::parallel::fullydistributed::Triangulation<dim> triangulation;
+  dealii::FE_SimplexP<dim>                               fe;
+  dealii::DoFHandler<dim>                                dof_handler;
+  dealii::QGaussSimplex<dim>                             quadrature;
 
   dealii::IndexSet locally_owned_dofs;
   dealii::IndexSet locally_relevant_dofs;
@@ -146,10 +148,10 @@ private:
   VectorType velocity;
   VectorType acceleration;
 
-  std::shared_ptr<dealii::Function<2>> u0_function;
-  std::shared_ptr<dealii::Function<2>> u1_function;
-  std::shared_ptr<dealii::Function<2>> forcing_function;
-  std::shared_ptr<dealii::Function<2>> sigma_function;
+  std::shared_ptr<dealii::Function<dim>> u0_function;
+  std::shared_ptr<dealii::Function<dim>> u1_function;
+  std::shared_ptr<dealii::Function<dim>> forcing_function;
+  std::shared_ptr<dealii::Function<dim>> sigma_function;
 
   bool output_enabled = true;
 };
