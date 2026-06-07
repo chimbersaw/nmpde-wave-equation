@@ -1,5 +1,7 @@
 #include "convergence_runner.hpp"
 
+#include <deal.II/base/utilities.h>
+
 #include <algorithm>
 #include <cmath>
 #include <filesystem>
@@ -137,6 +139,9 @@ ConvergenceRunner::run_time_study() const
 void
 ConvergenceRunner::write_csv(const std::string &path, const std::vector<Entry> &entries) const
 {
+  if (dealii::Utilities::MPI::this_mpi_process(mpi_communicator) != 0)
+    return;
+
   std::filesystem::path out_path(path);
   if (out_path.has_parent_path())
     std::filesystem::create_directories(out_path.parent_path());

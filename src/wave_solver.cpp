@@ -6,6 +6,7 @@
 #include <deal.II/dofs/dof_tools.h>
 
 #include <deal.II/fe/fe_values.h>
+#include <deal.II/fe/mapping_fe.h>
 
 #include <deal.II/grid/grid_in.h>
 #include <deal.II/grid/grid_tools.h>
@@ -211,8 +212,7 @@ WaveSolver::initialize_state()
   rhs            = f0;
   rhs.add(-config.wave_speed * config.wave_speed, ku);
 
-  solve_spd_system(mass_matrix, acceleration, rhs);
-  enforce_acceleration_bc(acceleration, -config.dt, 0.0, config.dt, config.dt);
+  solve_acceleration_system(mass_matrix, acceleration, rhs, -config.dt, 0.0, config.dt, config.dt);
 }
 
 void
@@ -311,21 +311,68 @@ WaveSolver::solve_displacement_system(const MatrixType &A,
                                       const VectorType &rhs,
                                       const double      time) const
 {
+  dealii::AffineConstraints<double>                 constraints;
+  std::map<dealii::types::global_dof_index, double> boundary_values;
+  build_constraints(time, constraints, boundary_values);
+
+  solve_system_with_boundary_values(A, u, rhs, boundary_values);
+}
+
+void
+WaveSolver::solve_velocity_system(const MatrixType &A,
+                                  VectorType       &v,
+                                  const VectorType &rhs,
+                                  const double      previous_time,
+                                  const double      current_time,
+                                  const double      dt) const
+{
+  std::map<dealii::types::global_dof_index, double> boundary_values;
+  build_velocity_boundary_values(previous_time, current_time, dt, boundary_values);
+
+  solve_system_with_boundary_values(A, v, rhs, boundary_values);
+}
+
+void
+WaveSolver::solve_acceleration_system(const MatrixType &A,
+                                      VectorType       &a,
+                                      const VectorType &rhs,
+                                      const double      previous_time,
+                                      const double      current_time,
+                                      const double      next_time,
+                                      const double      dt) const
+{
+  std::map<dealii::types::global_dof_index, double> boundary_values;
+  build_acceleration_boundary_values(previous_time, current_time, next_time, dt, boundary_values);
+
+  solve_system_with_boundary_values(A, a, rhs, boundary_values);
+}
+
+void
+WaveSolver::solve_system_with_boundary_values(
+  const MatrixType                                        &A,
+  VectorType                                              &x,
+  const VectorType                                        &rhs,
+  const std::map<dealii::types::global_dof_index, double> &boundary_values) const
+{
   MatrixType system_matrix = create_matrix_like_system();
   system_matrix.copy_from(A);
 
   VectorType system_rhs = create_owned_vector();
   system_rhs            = rhs;
 
-  dealii::AffineConstraints<double>                 constraints;
-  std::map<dealii::types::global_dof_index, double> boundary_values;
-  build_constraints(time, constraints, boundary_values);
+  dealii::AffineConstraints<double> constraints;
+  dealii::DoFTools::make_hanging_node_constraints(dof_handler, constraints);
+  for (const auto &entry : boundary_values)
+    {
+      constraints.add_line(entry.first);
+      constraints.set_inhomogeneity(entry.first, entry.second);
+    }
+  constraints.close();
 
-  dealii::MatrixTools::apply_boundary_values(boundary_values, system_matrix, u, system_rhs, false);
+  dealii::MatrixTools::apply_boundary_values(boundary_values, system_matrix, x, system_rhs, false);
 
-  solve_spd_system(system_matrix, u, system_rhs);
-
-  constraints.distribute(u);
+  solve_spd_system(system_matrix, x, system_rhs);
+  constraints.distribute(x);
 }
 
 void
@@ -344,56 +391,86 @@ WaveSolver::enforce_displacement_bc(VectorType &u, const double time) const
 }
 
 void
-WaveSolver::enforce_velocity_bc(VectorType  &v,
-                                const double previous_time,
-                                const double current_time,
-                                const double dt) const
+WaveSolver::build_velocity_boundary_values(const double                                       previous_time,
+                                           const double                                       current_time,
+                                           const double                                       dt,
+                                           std::map<dealii::types::global_dof_index, double> &boundary_values) const
 {
   std::map<dealii::types::global_dof_index, double> boundary_old;
   std::map<dealii::types::global_dof_index, double> boundary_new;
 
   {
-    auto bc_old = make_named_function(config.bc, config.wave_speed);
-    bc_old->set_time(previous_time);
-
-    std::set<dealii::types::boundary_id> boundary_ids;
-    for (const auto &cell : dof_handler.active_cell_iterators())
-      if (cell->is_locally_owned())
-        for (const auto face_no : cell->face_indices())
-          if (cell->face(face_no)->at_boundary())
-            boundary_ids.insert(cell->face(face_no)->boundary_id());
-
-    for (const auto id : boundary_ids)
-      dealii::VectorTools::interpolate_boundary_values(dof_handler, id, *bc_old, boundary_old);
+    dealii::AffineConstraints<double> constraints;
+    build_constraints(previous_time, constraints, boundary_old);
   }
 
   {
-    auto bc_new = make_named_function(config.bc, config.wave_speed);
-    bc_new->set_time(current_time);
-
-    std::set<dealii::types::boundary_id> boundary_ids;
-    for (const auto &cell : dof_handler.active_cell_iterators())
-      if (cell->is_locally_owned())
-        for (const auto face_no : cell->face_indices())
-          if (cell->face(face_no)->at_boundary())
-            boundary_ids.insert(cell->face(face_no)->boundary_id());
-
-    for (const auto id : boundary_ids)
-      dealii::VectorTools::interpolate_boundary_values(dof_handler, id, *bc_new, boundary_new);
+    dealii::AffineConstraints<double> constraints;
+    build_constraints(current_time, constraints, boundary_new);
   }
 
+  boundary_values.clear();
   for (const auto &entry : boundary_new)
     {
-      const auto   it_old      = boundary_old.find(entry.first);
-      const double old_value   = (it_old == boundary_old.end()) ? 0.0 : it_old->second;
-      const double new_value   = entry.second;
-      const double bc_velocity = (new_value - old_value) / dt;
-
-      if (v.in_local_range(entry.first))
-        v[entry.first] = bc_velocity;
+      const auto   it_old          = boundary_old.find(entry.first);
+      const double old_value       = (it_old == boundary_old.end()) ? 0.0 : it_old->second;
+      const double new_value       = entry.second;
+      boundary_values[entry.first] = (new_value - old_value) / dt;
     }
+}
+
+void
+WaveSolver::enforce_velocity_bc(VectorType  &v,
+                                const double previous_time,
+                                const double current_time,
+                                const double dt) const
+{
+  std::map<dealii::types::global_dof_index, double> boundary_values;
+  build_velocity_boundary_values(previous_time, current_time, dt, boundary_values);
+
+  for (const auto &entry : boundary_values)
+    if (v.in_local_range(entry.first))
+      v[entry.first] = entry.second;
 
   v.compress(dealii::VectorOperation::insert);
+}
+
+void
+WaveSolver::build_acceleration_boundary_values(const double                                       previous_time,
+                                               const double                                       current_time,
+                                               const double                                       next_time,
+                                               const double                                       dt,
+                                               std::map<dealii::types::global_dof_index, double> &boundary_values) const
+{
+  std::map<dealii::types::global_dof_index, double> boundary_prev;
+  std::map<dealii::types::global_dof_index, double> boundary_curr;
+  std::map<dealii::types::global_dof_index, double> boundary_next;
+
+  {
+    dealii::AffineConstraints<double> constraints;
+    build_constraints(previous_time, constraints, boundary_prev);
+  }
+
+  {
+    dealii::AffineConstraints<double> constraints;
+    build_constraints(current_time, constraints, boundary_curr);
+  }
+
+  {
+    dealii::AffineConstraints<double> constraints;
+    build_constraints(next_time, constraints, boundary_next);
+  }
+
+  boundary_values.clear();
+  for (const auto &entry : boundary_curr)
+    {
+      const auto   it_prev         = boundary_prev.find(entry.first);
+      const auto   it_next         = boundary_next.find(entry.first);
+      const double g_prev          = (it_prev == boundary_prev.end()) ? 0.0 : it_prev->second;
+      const double g_curr          = entry.second;
+      const double g_next          = (it_next == boundary_next.end()) ? 0.0 : it_next->second;
+      boundary_values[entry.first] = (g_next - 2.0 * g_curr + g_prev) / (dt * dt);
+    }
 }
 
 void
@@ -403,50 +480,12 @@ WaveSolver::enforce_acceleration_bc(VectorType  &a,
                                     const double next_time,
                                     const double dt) const
 {
-  std::map<dealii::types::global_dof_index, double> boundary_prev;
-  std::map<dealii::types::global_dof_index, double> boundary_curr;
-  std::map<dealii::types::global_dof_index, double> boundary_next;
+  std::map<dealii::types::global_dof_index, double> boundary_values;
+  build_acceleration_boundary_values(previous_time, current_time, next_time, dt, boundary_values);
 
-  std::set<dealii::types::boundary_id> boundary_ids;
-  for (const auto &cell : dof_handler.active_cell_iterators())
-    if (cell->is_locally_owned())
-      for (const auto face_no : cell->face_indices())
-        if (cell->face(face_no)->at_boundary())
-          boundary_ids.insert(cell->face(face_no)->boundary_id());
-
-  {
-    auto bc_prev = make_named_function(config.bc, config.wave_speed);
-    bc_prev->set_time(previous_time);
-    for (const auto id : boundary_ids)
-      dealii::VectorTools::interpolate_boundary_values(dof_handler, id, *bc_prev, boundary_prev);
-  }
-
-  {
-    auto bc_curr = make_named_function(config.bc, config.wave_speed);
-    bc_curr->set_time(current_time);
-    for (const auto id : boundary_ids)
-      dealii::VectorTools::interpolate_boundary_values(dof_handler, id, *bc_curr, boundary_curr);
-  }
-
-  {
-    auto bc_next = make_named_function(config.bc, config.wave_speed);
-    bc_next->set_time(next_time);
-    for (const auto id : boundary_ids)
-      dealii::VectorTools::interpolate_boundary_values(dof_handler, id, *bc_next, boundary_next);
-  }
-
-  for (const auto &entry : boundary_curr)
-    {
-      const auto   it_prev = boundary_prev.find(entry.first);
-      const auto   it_next = boundary_next.find(entry.first);
-      const double g_prev  = (it_prev == boundary_prev.end()) ? 0.0 : it_prev->second;
-      const double g_curr  = entry.second;
-      const double g_next  = (it_next == boundary_next.end()) ? 0.0 : it_next->second;
-      const double a_bc    = (g_next - 2.0 * g_curr + g_prev) / (dt * dt);
-
-      if (a.in_local_range(entry.first))
-        a[entry.first] = a_bc;
-    }
+  for (const auto &entry : boundary_values)
+    if (a.in_local_range(entry.first))
+      a[entry.first] = entry.second;
 
   a.compress(dealii::VectorOperation::insert);
 }
@@ -517,59 +556,20 @@ WaveSolver::compute_l2_error(const double time) const
   u_relevant = solution;
   u_relevant.compress(dealii::VectorOperation::insert);
 
-  dealii::Vector<float> difference_per_cell(triangulation.n_active_cells());
+  const dealii::FE_SimplexP<dim> mapping_fe(1);
+  const dealii::MappingFE<dim>   mapping(mapping_fe);
+
+  dealii::Vector<double> difference_per_cell(triangulation.n_active_cells());
   difference_per_cell = 0.0;
-  dealii::VectorTools::integrate_difference(dof_handler,
+  dealii::VectorTools::integrate_difference(mapping,
+                                            dof_handler,
                                             u_relevant,
                                             *exact,
                                             difference_per_cell,
                                             dealii::QGaussSimplex<dim>(static_cast<unsigned int>(config.fe_degree + 3)),
                                             dealii::VectorTools::L2_norm);
 
-  double local_sq = 0.0;
-  for (const auto &cell : dof_handler.active_cell_iterators())
-    if (cell->is_locally_owned())
-      {
-        const double value = difference_per_cell(cell->active_cell_index());
-        local_sq += value * value;
-      }
-
-  const double global_sq       = dealii::Utilities::MPI::sum(local_sq, mpi_communicator);
-  const double vector_tools_l2 = std::sqrt(global_sq);
-  if (std::isfinite(vector_tools_l2))
-    return vector_tools_l2;
-
-  dealii::FEValues<dim> fe_values(fe,
-                                  quadrature,
-                                  dealii::update_values | dealii::update_gradients | dealii::update_quadrature_points |
-                                    dealii::update_JxW_values);
-  const unsigned int    dofs_per_cell = fe.n_dofs_per_cell();
-  const unsigned int    n_q_points    = quadrature.size();
-
-  std::vector<dealii::types::global_dof_index> local_dof_indices(dofs_per_cell);
-  std::vector<double>                          exact_values(n_q_points);
-
-  double local_sq_manual = 0.0;
-  for (const auto &cell : dof_handler.active_cell_iterators())
-    if (cell->is_locally_owned())
-      {
-        fe_values.reinit(cell);
-        cell->get_dof_indices(local_dof_indices);
-        exact->value_list(fe_values.get_quadrature_points(), exact_values);
-
-        for (unsigned int q = 0; q < n_q_points; ++q)
-          {
-            double uh_q = 0.0;
-            for (unsigned int i = 0; i < dofs_per_cell; ++i)
-              uh_q += u_relevant(local_dof_indices[i]) * fe_values.shape_value(i, q);
-
-            const double diff = uh_q - exact_values[q];
-            local_sq_manual += diff * diff * fe_values.JxW(q);
-          }
-      }
-
-  const double global_sq_manual = dealii::Utilities::MPI::sum(local_sq_manual, mpi_communicator);
-  return std::sqrt(global_sq_manual);
+  return dealii::VectorTools::compute_global_error(triangulation, difference_per_cell, dealii::VectorTools::L2_norm);
 }
 
 double
@@ -583,67 +583,20 @@ WaveSolver::compute_h1_error(const double time) const
   u_relevant = solution;
   u_relevant.compress(dealii::VectorOperation::insert);
 
-  dealii::Vector<float> difference_per_cell(triangulation.n_active_cells());
+  const dealii::FE_SimplexP<dim> mapping_fe(1);
+  const dealii::MappingFE<dim>   mapping(mapping_fe);
+
+  dealii::Vector<double> difference_per_cell(triangulation.n_active_cells());
   difference_per_cell = 0.0;
-  dealii::VectorTools::integrate_difference(dof_handler,
+  dealii::VectorTools::integrate_difference(mapping,
+                                            dof_handler,
                                             u_relevant,
                                             *exact,
                                             difference_per_cell,
                                             dealii::QGaussSimplex<dim>(static_cast<unsigned int>(config.fe_degree + 3)),
                                             dealii::VectorTools::H1_norm);
 
-  double local_sq = 0.0;
-  for (const auto &cell : dof_handler.active_cell_iterators())
-    if (cell->is_locally_owned())
-      {
-        const double value = difference_per_cell(cell->active_cell_index());
-        local_sq += value * value;
-      }
-
-  const double global_sq       = dealii::Utilities::MPI::sum(local_sq, mpi_communicator);
-  const double vector_tools_h1 = std::sqrt(global_sq);
-  if (std::isfinite(vector_tools_h1))
-    return vector_tools_h1;
-
-  dealii::FEValues<dim> fe_values(fe,
-                                  quadrature,
-                                  dealii::update_values | dealii::update_gradients | dealii::update_quadrature_points |
-                                    dealii::update_JxW_values);
-  const unsigned int    dofs_per_cell = fe.n_dofs_per_cell();
-  const unsigned int    n_q_points    = quadrature.size();
-
-  std::vector<dealii::types::global_dof_index> local_dof_indices(dofs_per_cell);
-  std::vector<double>                          exact_values(n_q_points);
-  std::vector<dealii::Tensor<1, dim>>          exact_gradients(n_q_points);
-
-  double local_sq_manual = 0.0;
-  for (const auto &cell : dof_handler.active_cell_iterators())
-    if (cell->is_locally_owned())
-      {
-        fe_values.reinit(cell);
-        cell->get_dof_indices(local_dof_indices);
-        exact->value_list(fe_values.get_quadrature_points(), exact_values);
-        exact->gradient_list(fe_values.get_quadrature_points(), exact_gradients);
-
-        for (unsigned int q = 0; q < n_q_points; ++q)
-          {
-            double                 uh_q = 0.0;
-            dealii::Tensor<1, dim> grad_uh_q;
-            for (unsigned int i = 0; i < dofs_per_cell; ++i)
-              {
-                const double u_i = u_relevant(local_dof_indices[i]);
-                uh_q += u_i * fe_values.shape_value(i, q);
-                grad_uh_q += u_i * fe_values.shape_grad(i, q);
-              }
-
-            const double value_diff = uh_q - exact_values[q];
-            const auto   grad_diff  = grad_uh_q - exact_gradients[q];
-            local_sq_manual += (value_diff * value_diff + grad_diff.norm_square()) * fe_values.JxW(q);
-          }
-      }
-
-  const double global_sq_manual = dealii::Utilities::MPI::sum(local_sq_manual, mpi_communicator);
-  return std::sqrt(global_sq_manual);
+  return dealii::VectorTools::compute_global_error(triangulation, difference_per_cell, dealii::VectorTools::H1_norm);
 }
 
 double

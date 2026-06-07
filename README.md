@@ -72,9 +72,11 @@ Non-square domain examples:
 - `configs/donut_angular_mode/newmark_avg_accel.cfg`
 
 Convergence (manufactured square exact solution, `configs/convergence/`):
-- `convergence_space.cfg`
-- `convergence_time.cfg`
-- `convergence_both.cfg`
+- `newmark_avg_accel.cfg`
+- `theta_forward.cfg`
+- `theta_crank_nicolson.cfg`
+- `theta_backward.cfg`
+- `newmark_leapfrog.cfg`
 
 ### Config keys (key=value)
 
@@ -98,15 +100,15 @@ Convergence-specific:
 
 ### Convergence outputs
 
-Convergence runs write CSV files in `results/`:
+Convergence runs write method-specific CSV files in `results/`, for example:
 
-- `results/convergence_space.csv`
-- `results/convergence_time.csv`
+- `results/convergence_newmark_avg_accel_space.csv`
+- `results/convergence_newmark_avg_accel_time.csv`
 
 Generate plots with:
 
 ```bash
-python3 scripts/plot_convergence.py --space-csv results/convergence_space.csv --time-csv results/convergence_time.csv --output results/convergence.png
+python3 scripts/plot_convergence.py --space-csv results/convergence_newmark_avg_accel_space.csv --time-csv results/convergence_newmark_avg_accel_time.csv --output results/convergence_newmark_avg_accel.png
 ```
 
 ### Output files

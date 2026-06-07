@@ -85,6 +85,23 @@ public:
   solve_displacement_system(const MatrixType &A, VectorType &u, const VectorType &rhs, const double time) const;
 
   void
+  solve_velocity_system(const MatrixType &A,
+                        VectorType       &v,
+                        const VectorType &rhs,
+                        double            previous_time,
+                        double            current_time,
+                        double            dt) const;
+
+  void
+  solve_acceleration_system(const MatrixType &A,
+                            VectorType       &a,
+                            const VectorType &rhs,
+                            double            previous_time,
+                            double            current_time,
+                            double            next_time,
+                            double            dt) const;
+
+  void
   enforce_displacement_bc(VectorType &u, double time) const;
 
   void
@@ -113,6 +130,25 @@ private:
   build_constraints(double                                             time,
                     dealii::AffineConstraints<double>                 &constraints,
                     std::map<dealii::types::global_dof_index, double> &boundary_values) const;
+
+  void
+  build_velocity_boundary_values(double                                             previous_time,
+                                 double                                             current_time,
+                                 double                                             dt,
+                                 std::map<dealii::types::global_dof_index, double> &boundary_values) const;
+
+  void
+  build_acceleration_boundary_values(double                                             previous_time,
+                                     double                                             current_time,
+                                     double                                             next_time,
+                                     double                                             dt,
+                                     std::map<dealii::types::global_dof_index, double> &boundary_values) const;
+
+  void
+  solve_system_with_boundary_values(const MatrixType                                        &A,
+                                    VectorType                                              &x,
+                                    const VectorType                                        &rhs,
+                                    const std::map<dealii::types::global_dof_index, double> &boundary_values) const;
 
   double
   compute_l2_error(double time) const;

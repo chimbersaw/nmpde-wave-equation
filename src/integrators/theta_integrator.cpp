@@ -62,24 +62,21 @@ ThetaTimeIntegrator::run()
       rhs.add(dt * theta, force_np1);
 
       if (std::abs(theta) < 1e-14)
-        solver.solve_spd_system(M, v_new, rhs);
+        solver.solve_velocity_system(M, v_new, rhs, t, t_next, dt);
       else
-        solver.solve_spd_system(effective_matrix, v_new, rhs);
+        solver.solve_velocity_system(effective_matrix, v_new, rhs, t, t_next, dt);
 
       u_new = u;
       u_new.add(dt * (1.0 - theta), v);
       u_new.add(dt * theta, v_new);
       solver.enforce_displacement_bc(u_new, t_next);
 
-      solver.enforce_velocity_bc(v_new, t, t_next, dt);
-
       auto rhs_acc = solver.create_owned_vector();
       auto ku_new  = solver.create_owned_vector();
       K.vmult(ku_new, u_new);
       rhs_acc = force_np1;
       rhs_acc.add(-c2, ku_new);
-      solver.solve_spd_system(M, a, rhs_acc);
-      solver.enforce_acceleration_bc(a, t, t_next, t_next + dt, dt);
+      solver.solve_acceleration_system(M, a, rhs_acc, t, t_next, t_next + dt, dt);
 
       u = u_new;
       v = v_new;
