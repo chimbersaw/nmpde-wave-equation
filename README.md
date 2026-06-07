@@ -62,7 +62,16 @@ Gaussian pulse (`configs/gaussian_pulse/`):
 - `newmark_avg_accel.cfg`
 - `newmark_leapfrog.cfg`
 
-Convergence (standing wave, `configs/convergence/`):
+Boundary-driven examples:
+- `configs/rectangle_driven_left_boundary/newmark_avg_accel.cfg`
+- `configs/boundary_pulse_left/newmark_avg_accel.cfg`
+- `configs/two_sided_driven_boundary/newmark_avg_accel.cfg`
+
+Non-square domain examples:
+- `configs/circle_standing_wave/newmark_avg_accel.cfg`
+- `configs/donut_angular_mode/newmark_avg_accel.cfg`
+
+Convergence (manufactured square exact solution, `configs/convergence/`):
 - `convergence_space.cfg`
 - `convergence_time.cfg`
 - `convergence_both.cfg`
