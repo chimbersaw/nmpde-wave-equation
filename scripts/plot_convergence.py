@@ -81,12 +81,62 @@ def format_tick(value, _pos):
     return f"{value:g}"
 
 
+def plot_scaling(csv_path, output_path):
+    rows = load_csv(csv_path)
+    points = sorted(
+        [(to_int(r, "n_processes", 0), to_float(r, "wall_time_s")) for r in rows],
+        key=lambda t: t[0],
+    )
+    points = [(n, t) for n, t in points if n > 0 and t > 0]
+    if not points:
+        raise RuntimeError(f"No positive scaling data found in {csv_path}")
+
+    ranks = [p[0] for p in points]
+    times = [p[1] for p in points]
+    speedups = [times[0] / t for t in times]
+
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+    title = method_label(rows[0]) if rows else "Strong scaling"
+    fig.suptitle(title, fontsize=14)
+
+    axes[0].plot(ranks, times, "o-", label="measured")
+    for n, t in zip(ranks, times):
+        axes[0].annotate(f"{t:g}s", (n, t), textcoords="offset points", xytext=(0, 7), ha="center")
+    axes[0].set_title("Wall-clock time")
+    axes[0].set_xlabel("MPI processes")
+    axes[0].set_ylabel("time, s")
+    axes[0].set_xticks(ranks)
+    axes[0].grid(True, ls=":")
+
+    axes[1].plot(ranks, speedups, "o-", label="measured")
+    axes[1].plot(ranks, ranks, "k--", linewidth=1.2, alpha=0.65, label="ideal")
+    axes[1].set_title("Strong scaling speedup")
+    axes[1].set_xlabel("MPI processes")
+    axes[1].set_ylabel("speedup vs n=1")
+    axes[1].set_xticks(ranks)
+    axes[1].grid(True, ls=":")
+    axes[1].legend()
+
+    fig.tight_layout(rect=[0, 0, 1, 0.94])
+    fig.savefig(output_path, dpi=160)
+
+
 def main():
     parser = argparse.ArgumentParser(description="Plot convergence CSV files")
     parser.add_argument("--space-csv", default="results/convergence_newmark_avg_accel_space.csv")
     parser.add_argument("--time-csv", default="results/convergence_newmark_avg_accel_time.csv")
     parser.add_argument("--output", default="results/convergence_newmark_avg_accel.png")
+    parser.add_argument("--scaling-csv", default=None)
+    parser.add_argument("--scaling-output", default="results/strong_scaling_research.png")
+    parser.add_argument("--scaling-only", action="store_true")
     args = parser.parse_args()
+
+    if args.scaling_csv and args.scaling_only:
+        plot_scaling(args.scaling_csv, args.scaling_output)
+        return
 
     output_path = Path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -146,6 +196,9 @@ def main():
     else:
       fig.tight_layout()
     fig.savefig(output_path, dpi=160)
+
+    if args.scaling_csv:
+        plot_scaling(args.scaling_csv, args.scaling_output)
 
 
 if __name__ == "__main__":
