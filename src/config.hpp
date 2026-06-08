@@ -47,10 +47,10 @@ struct WaveProblemConfig
   std::string              convergence_csv_time       = "results/convergence_time.csv";
 
   std::string diagnostics_csv;
-  int         diagnostics_interval       = 1;
-  double      probe_x                    = 2.5;
-  double      probe_y                    = 2.5;
-  double      divergence_energy_ratio    = 1e8;
+  int         diagnostics_interval    = 1;
+  double      probe_x                 = 2.5;
+  double      probe_y                 = 2.5;
+  double      divergence_energy_ratio = 1e8;
 };
 
 WaveProblemConfig

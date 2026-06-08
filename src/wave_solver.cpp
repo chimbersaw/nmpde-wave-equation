@@ -13,11 +13,9 @@
 #include <deal.II/grid/tria.h>
 #include <deal.II/grid/tria_description.h>
 
-#include <deal.II/lac/dynamic_sparsity_pattern.h>
+#include <deal.II/lac/solver_cg.h>
 #include <deal.II/lac/solver_control.h>
-#include <deal.II/lac/sparsity_tools.h>
 #include <deal.II/lac/trilinos_precondition.h>
-#include <deal.II/lac/trilinos_solver.h>
 
 #include <deal.II/numerics/data_out.h>
 #include <deal.II/numerics/matrix_tools.h>
@@ -40,10 +38,11 @@ WaveSolver::WaveSolver(const WaveProblemConfig &config, MPI_Comm mpi_communicato
   , config(config)
   , pcout(std::cout, dealii::Utilities::MPI::this_mpi_process(mpi_communicator) == 0)
   , triangulation(mpi_communicator)
-  , fe(static_cast<unsigned int>(config.fe_degree))
   , dof_handler(triangulation)
-  , quadrature(static_cast<unsigned int>(config.fe_degree + 2))
 {
+  fe         = std::make_unique<dealii::FE_SimplexP<dim>>(static_cast<unsigned int>(config.fe_degree));
+  quadrature = std::make_unique<dealii::QGaussSimplex<dim>>(static_cast<unsigned int>(config.fe_degree + 1));
+
   u0_function      = make_named_function(config.u0, config.wave_speed);
   u1_function      = make_named_function(config.u1, config.wave_speed);
   forcing_function = make_named_function(config.f, config.wave_speed);
@@ -107,12 +106,12 @@ WaveSolver::create_owned_vector() const
 WaveSolver::MatrixType
 WaveSolver::create_matrix_like_system() const
 {
-  dealii::DynamicSparsityPattern dsp(locally_relevant_dofs);
-  dealii::DoFTools::make_sparsity_pattern(dof_handler, dsp);
-  dealii::SparsityTools::distribute_sparsity_pattern(dsp, locally_owned_dofs, mpi_communicator, locally_relevant_dofs);
+  dealii::TrilinosWrappers::SparsityPattern sparsity(locally_owned_dofs, mpi_communicator);
+  dealii::DoFTools::make_sparsity_pattern(dof_handler, sparsity);
+  sparsity.compress();
 
   MatrixType matrix;
-  matrix.reinit(locally_owned_dofs, locally_owned_dofs, dsp, mpi_communicator);
+  matrix.reinit(sparsity);
   return matrix;
 }
 
@@ -134,17 +133,17 @@ WaveSolver::setup_triangulation_and_dofs()
 
   triangulation.create_triangulation(description);
 
-  dof_handler.distribute_dofs(fe);
+  dof_handler.distribute_dofs(*fe);
 
   locally_owned_dofs    = dof_handler.locally_owned_dofs();
   locally_relevant_dofs = dealii::DoFTools::extract_locally_relevant_dofs(dof_handler);
 
-  dealii::DynamicSparsityPattern dsp(locally_relevant_dofs);
-  dealii::DoFTools::make_sparsity_pattern(dof_handler, dsp);
-  dealii::SparsityTools::distribute_sparsity_pattern(dsp, locally_owned_dofs, mpi_communicator, locally_relevant_dofs);
+  dealii::TrilinosWrappers::SparsityPattern sparsity(locally_owned_dofs, mpi_communicator);
+  dealii::DoFTools::make_sparsity_pattern(dof_handler, sparsity);
+  sparsity.compress();
 
-  mass_matrix.reinit(locally_owned_dofs, locally_owned_dofs, dsp, mpi_communicator);
-  stiffness_matrix.reinit(locally_owned_dofs, locally_owned_dofs, dsp, mpi_communicator);
+  mass_matrix.reinit(sparsity);
+  stiffness_matrix.reinit(sparsity);
 
   solution.reinit(locally_owned_dofs, mpi_communicator);
   velocity.reinit(locally_owned_dofs, mpi_communicator);
@@ -156,12 +155,12 @@ WaveSolver::setup_triangulation_and_dofs()
 void
 WaveSolver::assemble_system_matrices()
 {
-  dealii::FEValues<dim> fe_values(fe,
-                                  quadrature,
+  dealii::FEValues<dim> fe_values(*fe,
+                                  *quadrature,
                                   dealii::update_values | dealii::update_gradients | dealii::update_JxW_values);
 
-  const unsigned int dofs_per_cell = fe.n_dofs_per_cell();
-  const unsigned int n_q_points    = quadrature.size();
+  const unsigned int dofs_per_cell = fe->dofs_per_cell;
+  const unsigned int n_q_points    = quadrature->size();
 
   dealii::FullMatrix<double>                   cell_mass(dofs_per_cell, dofs_per_cell);
   dealii::FullMatrix<double>                   cell_stiffness(dofs_per_cell, dofs_per_cell);
@@ -227,12 +226,12 @@ WaveSolver::assemble_force(const double time, VectorType &force) const
 
   forcing_function->set_time(time);
 
-  dealii::FEValues<dim> fe_values(fe,
-                                  quadrature,
+  dealii::FEValues<dim> fe_values(*fe,
+                                  *quadrature,
                                   dealii::update_values | dealii::update_quadrature_points | dealii::update_JxW_values);
 
-  const unsigned int dofs_per_cell = fe.n_dofs_per_cell();
-  const unsigned int n_q_points    = quadrature.size();
+  const unsigned int dofs_per_cell = fe->dofs_per_cell;
+  const unsigned int n_q_points    = quadrature->size();
 
   dealii::Vector<double>                       cell_rhs(dofs_per_cell);
   std::vector<double>                          forcing_values(n_q_points, 0.0);
@@ -263,19 +262,16 @@ WaveSolver::assemble_force(const double time, VectorType &force) const
 }
 
 void
-WaveSolver::build_constraints(const double                                       time,
-                              dealii::AffineConstraints<double>                 &constraints,
-                              std::map<dealii::types::global_dof_index, double> &boundary_values) const
+WaveSolver::build_boundary_values(const double                                       time,
+                                  std::map<dealii::types::global_dof_index, double> &boundary_values) const
 {
-  constraints.clear();
   boundary_values.clear();
-
-  dealii::DoFTools::make_hanging_node_constraints(dof_handler, constraints);
 
   auto bc_function = make_named_function(config.bc, config.wave_speed);
   bc_function->set_time(time);
 
-  std::set<dealii::types::boundary_id> boundary_ids;
+  std::map<dealii::types::boundary_id, const dealii::Function<dim> *> boundary_functions;
+  std::set<dealii::types::boundary_id>                                boundary_ids;
   for (const auto &cell : dof_handler.active_cell_iterators())
     if (cell->is_locally_owned())
       for (const auto face_no : cell->face_indices())
@@ -283,28 +279,19 @@ WaveSolver::build_constraints(const double                                      
           boundary_ids.insert(cell->face(face_no)->boundary_id());
 
   for (const auto id : boundary_ids)
-    dealii::VectorTools::interpolate_boundary_values(dof_handler, id, *bc_function, boundary_values);
+    boundary_functions[id] = bc_function.get();
 
-  for (const auto &entry : boundary_values)
-    {
-      constraints.add_line(entry.first);
-      constraints.set_inhomogeneity(entry.first, entry.second);
-    }
-
-  constraints.close();
+  dealii::VectorTools::interpolate_boundary_values(dof_handler, boundary_functions, boundary_values);
 }
 
 void
 WaveSolver::solve_spd_system(const MatrixType &A, VectorType &x, const VectorType &b) const
 {
-  dealii::SolverControl              solver_control(2000, 1e-12 * b.l2_norm() + 1e-14);
-  dealii::TrilinosWrappers::SolverCG solver(solver_control);
+  dealii::SolverControl                                   solver_control(10000, 1e-12 * b.l2_norm() + 1e-14);
+  dealii::SolverCG<dealii::TrilinosWrappers::MPI::Vector> solver(solver_control);
 
-  dealii::TrilinosWrappers::PreconditionAMG                 preconditioner;
-  dealii::TrilinosWrappers::PreconditionAMG::AdditionalData amg_data;
-  amg_data.elliptic              = true;
-  amg_data.higher_order_elements = (config.fe_degree > 1);
-  preconditioner.initialize(A, amg_data);
+  dealii::TrilinosWrappers::PreconditionSSOR preconditioner;
+  preconditioner.initialize(A, dealii::TrilinosWrappers::PreconditionSSOR::AdditionalData(1.0));
 
   x = 0.0;
   solver.solve(A, x, b, preconditioner);
@@ -316,9 +303,8 @@ WaveSolver::solve_displacement_system(const MatrixType &A,
                                       const VectorType &rhs,
                                       const double      time) const
 {
-  dealii::AffineConstraints<double>                 constraints;
   std::map<dealii::types::global_dof_index, double> boundary_values;
-  build_constraints(time, constraints, boundary_values);
+  build_boundary_values(time, boundary_values);
 
   solve_system_with_boundary_values(A, u, rhs, boundary_values);
 }
@@ -365,34 +351,22 @@ WaveSolver::solve_system_with_boundary_values(
   VectorType system_rhs = create_owned_vector();
   system_rhs            = rhs;
 
-  dealii::AffineConstraints<double> constraints;
-  dealii::DoFTools::make_hanging_node_constraints(dof_handler, constraints);
-  for (const auto &entry : boundary_values)
-    {
-      constraints.add_line(entry.first);
-      constraints.set_inhomogeneity(entry.first, entry.second);
-    }
-  constraints.close();
-
-  dealii::MatrixTools::apply_boundary_values(boundary_values, system_matrix, x, system_rhs, false);
+  dealii::MatrixTools::apply_boundary_values(boundary_values, system_matrix, x, system_rhs, true);
 
   solve_spd_system(system_matrix, x, system_rhs);
-  constraints.distribute(x);
 }
 
 void
 WaveSolver::enforce_displacement_bc(VectorType &u, const double time) const
 {
-  dealii::AffineConstraints<double>                 constraints;
   std::map<dealii::types::global_dof_index, double> boundary_values;
-  build_constraints(time, constraints, boundary_values);
+  build_boundary_values(time, boundary_values);
 
   for (const auto &entry : boundary_values)
     if (u.in_local_range(entry.first))
       u[entry.first] = entry.second;
 
   u.compress(dealii::VectorOperation::insert);
-  constraints.distribute(u);
 }
 
 void
@@ -404,15 +378,8 @@ WaveSolver::build_velocity_boundary_values(const double                         
   std::map<dealii::types::global_dof_index, double> boundary_old;
   std::map<dealii::types::global_dof_index, double> boundary_new;
 
-  {
-    dealii::AffineConstraints<double> constraints;
-    build_constraints(previous_time, constraints, boundary_old);
-  }
-
-  {
-    dealii::AffineConstraints<double> constraints;
-    build_constraints(current_time, constraints, boundary_new);
-  }
+  build_boundary_values(previous_time, boundary_old);
+  build_boundary_values(current_time, boundary_new);
 
   boundary_values.clear();
   for (const auto &entry : boundary_new)
@@ -451,20 +418,9 @@ WaveSolver::build_acceleration_boundary_values(const double                     
   std::map<dealii::types::global_dof_index, double> boundary_curr;
   std::map<dealii::types::global_dof_index, double> boundary_next;
 
-  {
-    dealii::AffineConstraints<double> constraints;
-    build_constraints(previous_time, constraints, boundary_prev);
-  }
-
-  {
-    dealii::AffineConstraints<double> constraints;
-    build_constraints(current_time, constraints, boundary_curr);
-  }
-
-  {
-    dealii::AffineConstraints<double> constraints;
-    build_constraints(next_time, constraints, boundary_next);
-  }
+  build_boundary_values(previous_time, boundary_prev);
+  build_boundary_values(current_time, boundary_curr);
+  build_boundary_values(next_time, boundary_next);
 
   boundary_values.clear();
   for (const auto &entry : boundary_curr)
@@ -576,8 +532,9 @@ WaveSolver::compute_exact_probe(const double time) const
 bool
 WaveSolver::log_diagnostics(const unsigned int step, const double time)
 {
-  const double energy       = compute_energy();
-  const double energy_ratio = (initial_energy > 0.0) ? energy / initial_energy : std::numeric_limits<double>::quiet_NaN();
+  const double energy = compute_energy();
+  const double energy_ratio =
+    (initial_energy > 0.0) ? energy / initial_energy : std::numeric_limits<double>::quiet_NaN();
 
   if (should_log_diagnostics(step))
     {

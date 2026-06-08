@@ -9,9 +9,9 @@
 
 #include <deal.II/dofs/dof_handler.h>
 
+#include <deal.II/fe/fe.h>
 #include <deal.II/fe/fe_simplex_p.h>
 
-#include <deal.II/lac/affine_constraints.h>
 #include <deal.II/lac/trilinos_sparse_matrix.h>
 #include <deal.II/lac/trilinos_vector.h>
 
@@ -130,9 +130,7 @@ private:
   assemble_system_matrices();
 
   void
-  build_constraints(double                                             time,
-                    dealii::AffineConstraints<double>                 &constraints,
-                    std::map<dealii::types::global_dof_index, double> &boundary_values) const;
+  build_boundary_values(double time, std::map<dealii::types::global_dof_index, double> &boundary_values) const;
 
   void
   build_velocity_boundary_values(double                                             previous_time,
@@ -184,9 +182,9 @@ private:
   dealii::ConditionalOStream pcout;
 
   dealii::parallel::fullydistributed::Triangulation<dim> triangulation;
-  dealii::FE_SimplexP<dim>                               fe;
+  std::unique_ptr<dealii::FiniteElement<dim>>            fe;
   dealii::DoFHandler<dim>                                dof_handler;
-  dealii::QGaussSimplex<dim>                             quadrature;
+  std::unique_ptr<dealii::Quadrature<dim>>               quadrature;
 
   dealii::IndexSet locally_owned_dofs;
   dealii::IndexSet locally_relevant_dofs;
@@ -202,6 +200,6 @@ private:
   std::shared_ptr<dealii::Function<dim>> u1_function;
   std::shared_ptr<dealii::Function<dim>> forcing_function;
 
-  bool output_enabled = true;
+  bool   output_enabled = true;
   double initial_energy = 0.0;
 };
