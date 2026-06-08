@@ -22,9 +22,13 @@
 #include <deal.II/numerics/data_out.h>
 #include <deal.II/numerics/matrix_tools.h>
 #include <deal.II/numerics/vector_tools.h>
+#include <deal.II/numerics/vector_tools_point_value.h>
 
 #include <cmath>
 #include <filesystem>
+#include <fstream>
+#include <iomanip>
+#include <limits>
 #include <set>
 
 #include "function_factory.hpp"
@@ -47,6 +51,7 @@ WaveSolver::WaveSolver(const WaveProblemConfig &config, MPI_Comm mpi_communicato
   setup_triangulation_and_dofs();
   assemble_system_matrices();
   initialize_state();
+  initial_energy = compute_energy();
 }
 
 void
@@ -493,11 +498,115 @@ WaveSolver::enforce_acceleration_bc(VectorType  &a,
 bool
 WaveSolver::should_output(const unsigned int step) const
 {
-  if (!output_enabled)
+  if (!output_enabled || !config.write_solution)
     return false;
 
   return (step == 0 || step == static_cast<unsigned int>(config.n_steps) ||
           step % static_cast<unsigned int>(config.output_interval) == 0);
+}
+
+bool
+WaveSolver::diagnostics_enabled() const
+{
+  return !config.diagnostics_csv.empty();
+}
+
+bool
+WaveSolver::should_log_diagnostics(const unsigned int step) const
+{
+  if (!diagnostics_enabled())
+    return false;
+
+  return (step == 0 || step == static_cast<unsigned int>(config.n_steps) ||
+          step % static_cast<unsigned int>(config.diagnostics_interval) == 0);
+}
+
+double
+WaveSolver::compute_energy() const
+{
+  VectorType tmp = create_owned_vector();
+
+  mass_matrix.vmult(tmp, velocity);
+  const double kinetic = velocity * tmp;
+
+  stiffness_matrix.vmult(tmp, solution);
+  const double potential = config.wave_speed * config.wave_speed * (solution * tmp);
+
+  return 0.5 * (kinetic + potential);
+}
+
+double
+WaveSolver::compute_probe_value(const VectorType &vector) const
+{
+  VectorType relevant_vector;
+  relevant_vector.reinit(locally_owned_dofs, locally_relevant_dofs, mpi_communicator);
+  relevant_vector = vector;
+  relevant_vector.compress(dealii::VectorOperation::insert);
+
+  const dealii::Point<dim> probe(config.probe_x, config.probe_y);
+
+  double local_value = 0.0;
+  int    local_found = 0;
+
+  try
+    {
+      local_value = dealii::VectorTools::point_value(dof_handler, relevant_vector, probe);
+      local_found = 1;
+    }
+  catch (...)
+    {}
+
+  const double global_value = dealii::Utilities::MPI::sum(local_value, mpi_communicator);
+  const int    global_found = dealii::Utilities::MPI::sum(local_found, mpi_communicator);
+
+  if (global_found == 0)
+    return std::numeric_limits<double>::quiet_NaN();
+
+  return global_value / static_cast<double>(global_found);
+}
+
+double
+WaveSolver::compute_exact_probe(const double time) const
+{
+  auto exact = make_named_function(config.convergence_reference_case, config.wave_speed);
+  exact->set_time(time);
+  return exact->value(dealii::Point<dim>(config.probe_x, config.probe_y));
+}
+
+bool
+WaveSolver::log_diagnostics(const unsigned int step, const double time)
+{
+  const double energy       = compute_energy();
+  const double energy_ratio = (initial_energy > 0.0) ? energy / initial_energy : std::numeric_limits<double>::quiet_NaN();
+
+  if (should_log_diagnostics(step))
+    {
+      const double probe       = compute_probe_value(solution);
+      const double exact_probe = compute_exact_probe(time);
+
+      if (dealii::Utilities::MPI::this_mpi_process(mpi_communicator) == 0)
+        {
+          const std::filesystem::path out_path(config.diagnostics_csv);
+          if (out_path.has_parent_path())
+            std::filesystem::create_directories(out_path.parent_path());
+
+          std::ofstream out(config.diagnostics_csv, step == 0 ? std::ios::trunc : std::ios::app);
+          if (step == 0)
+            out << "step,time,energy,energy_ratio,probe_u,exact_probe_u,probe_error\n";
+
+          out << std::setprecision(16) << step << ',' << time << ',' << energy << ',' << energy_ratio << ',' << probe
+              << ',' << exact_probe << ',' << (probe - exact_probe) << '\n';
+        }
+    }
+
+  const bool finite = std::isfinite(energy) && std::isfinite(energy_ratio);
+  if (!finite)
+    return false;
+
+  if (config.divergence_energy_ratio > 0.0 && initial_energy > 0.0 && energy_ratio > config.divergence_energy_ratio)
+    return false;
+
+  return true;
 }
 
 void
@@ -530,6 +639,9 @@ WaveSolver::output_results(const unsigned int step, const double) const
 void
 WaveSolver::run()
 {
+  if (!log_diagnostics(0, 0.0))
+    return;
+
   if (should_output(0))
     output_results(0, 0.0);
 

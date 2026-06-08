@@ -103,6 +103,9 @@ NewmarkTimeIntegrator::run()
       v = v_new;
       a = a_new;
 
+      if (!solver.log_diagnostics(static_cast<unsigned int>(step + 1), t_next))
+        break;
+
       if (solver.should_output(static_cast<unsigned int>(step + 1)))
         solver.output_results(static_cast<unsigned int>(step + 1), t_next);
     }

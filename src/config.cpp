@@ -36,6 +36,17 @@ namespace
     return out;
   }
 
+  bool
+  parse_bool(const std::string &value)
+  {
+    if (value == "true" || value == "1" || value == "yes" || value == "on")
+      return true;
+    if (value == "false" || value == "0" || value == "no" || value == "off")
+      return false;
+
+    throw std::runtime_error("Invalid boolean value: " + value);
+  }
+
   WaveProblemConfig::Mode
   parse_mode(const std::string &value)
   {
@@ -77,6 +88,8 @@ namespace
       throw std::runtime_error("n_steps must be > 0.");
     if (cfg.output_interval <= 0)
       throw std::runtime_error("output_interval must be > 0.");
+    if (cfg.diagnostics_interval <= 0)
+      throw std::runtime_error("diagnostics_interval must be > 0.");
 
     if (cfg.method == WaveProblemConfig::Method::theta)
       {
@@ -136,6 +149,7 @@ parse_config_file(const std::string &path)
                                             "n_steps",
                                             "output_interval",
                                             "output_dir",
+                                            "write_solution",
                                             "u0",
                                             "u1",
                                             "f",
@@ -147,7 +161,12 @@ parse_config_file(const std::string &path)
                                             "convergence_dt_values",
                                             "convergence_reference_case",
                                             "convergence_csv_space",
-                                            "convergence_csv_time"};
+                                            "convergence_csv_time",
+                                            "diagnostics_csv",
+                                            "diagnostics_interval",
+                                            "probe_x",
+                                            "probe_y",
+                                            "divergence_energy_ratio"};
 
   std::string line;
   int         line_no = 0;
@@ -186,6 +205,8 @@ parse_config_file(const std::string &path)
         cfg.output_interval = std::stoi(value);
       else if (key == "output_dir")
         cfg.output_dir = value;
+      else if (key == "write_solution")
+        cfg.write_solution = parse_bool(value);
       else if (key == "u0")
         cfg.u0 = value;
       else if (key == "u1")
@@ -210,6 +231,16 @@ parse_config_file(const std::string &path)
         cfg.convergence_csv_space = value;
       else if (key == "convergence_csv_time")
         cfg.convergence_csv_time = value;
+      else if (key == "diagnostics_csv")
+        cfg.diagnostics_csv = value;
+      else if (key == "diagnostics_interval")
+        cfg.diagnostics_interval = std::stoi(value);
+      else if (key == "probe_x")
+        cfg.probe_x = std::stod(value);
+      else if (key == "probe_y")
+        cfg.probe_y = std::stod(value);
+      else if (key == "divergence_energy_ratio")
+        cfg.divergence_energy_ratio = std::stod(value);
     }
 
   auto resolve_relative = [&config_dir](const std::string &p) -> std::string {
@@ -225,6 +256,7 @@ parse_config_file(const std::string &path)
   cfg.output_dir            = resolve_relative(cfg.output_dir);
   cfg.convergence_csv_space = resolve_relative(cfg.convergence_csv_space);
   cfg.convergence_csv_time  = resolve_relative(cfg.convergence_csv_time);
+  cfg.diagnostics_csv       = resolve_relative(cfg.diagnostics_csv);
   for (auto &mesh : cfg.convergence_mesh_files)
     mesh = resolve_relative(mesh);
 

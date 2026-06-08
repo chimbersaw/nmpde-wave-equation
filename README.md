@@ -85,6 +85,7 @@ Core:
 - `method = theta | newmark`
 - `mesh_file`, `fe_degree`, `wave_speed`, `dt`, `n_steps`
 - `output_interval`, `output_dir`
+- `write_solution = true | false`
 - `u0`, `u1`, `f`, `bc`
 
 Method-specific:
@@ -98,6 +99,12 @@ Convergence-specific:
 - `convergence_csv_space`
 - `convergence_csv_time`
 
+Diagnostics-specific:
+- `diagnostics_csv`
+- `diagnostics_interval`
+- `probe_x`, `probe_y`
+- `divergence_energy_ratio`
+
 ### Convergence outputs
 
 Convergence runs write method-specific CSV files in `results/`, for example:
@@ -110,6 +117,22 @@ Generate plots with:
 ```bash
 python3 scripts/plot_convergence.py --space-csv results/convergence_newmark_avg_accel_space.csv --time-csv results/convergence_newmark_avg_accel_time.csv --output results/convergence_newmark_avg_accel.png
 ```
+
+### Dissipation and dispersion diagnostics
+
+The solver can log per-step discrete energy and a point probe. A sweep script generates diagnostic
+dashboards for energy conservation and point-probe phase/amplitude error:
+
+```bash
+.venv/bin/python scripts/run_dissipation_dispersion.py
+```
+
+Outputs:
+
+- `results/dissipation_dispersion/dissipation_energy.png`
+- `results/dissipation_dispersion/dispersion_probe.png`
+- `results/dissipation_dispersion/dissipation_dispersion_summary.csv`
+- `results/dissipation_dispersion/series/*.csv`
 
 ### Output files
 

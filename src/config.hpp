@@ -29,6 +29,7 @@ struct WaveProblemConfig
   int         n_steps         = 100;
   int         output_interval = 10;
   std::string output_dir      = "solution";
+  bool        write_solution  = true;
 
   std::string u0 = "standing_wave_5x5";
   std::string u1 = "standing_wave_5x5_velocity";
@@ -44,6 +45,12 @@ struct WaveProblemConfig
   std::string              convergence_reference_case = "standing_wave_5x5_exact";
   std::string              convergence_csv_space      = "results/convergence_space.csv";
   std::string              convergence_csv_time       = "results/convergence_time.csv";
+
+  std::string diagnostics_csv;
+  int         diagnostics_interval       = 1;
+  double      probe_x                    = 2.5;
+  double      probe_y                    = 2.5;
+  double      divergence_energy_ratio    = 1e8;
 };
 
 WaveProblemConfig

@@ -48,6 +48,9 @@ public:
   void
   set_output_enabled(bool enabled);
 
+  bool
+  log_diagnostics(unsigned int step, double time);
+
   ConvergenceResult
   compute_convergence_result() const;
 
@@ -159,6 +162,21 @@ private:
   double
   estimate_mesh_h() const;
 
+  bool
+  diagnostics_enabled() const;
+
+  bool
+  should_log_diagnostics(unsigned int step) const;
+
+  double
+  compute_energy() const;
+
+  double
+  compute_probe_value(const VectorType &vector) const;
+
+  double
+  compute_exact_probe(double time) const;
+
   MPI_Comm mpi_communicator;
 
   WaveProblemConfig config;
@@ -185,4 +203,5 @@ private:
   std::shared_ptr<dealii::Function<dim>> forcing_function;
 
   bool output_enabled = true;
+  double initial_energy = 0.0;
 };
