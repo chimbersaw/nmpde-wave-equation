@@ -41,8 +41,7 @@ misc/
 # Misc
 .idea
 .DS_Store
-report/
-videos/
+videos-orig/
 slides/
 labs/
 tmp.txt
